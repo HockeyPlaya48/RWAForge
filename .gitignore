@@ -1,0 +1,30 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Hardhat
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/
+contracts/coverage/
+contracts/coverage.json
+contracts/.openzeppelin/
+
+# Foundry
+contracts/out/
+contracts/broadcast/
+contracts/lib/
+
+# Next.js
+dashboard/.next/
+dashboard/out/
+dashboard/build/
+*.tsbuildinfo
+
+# SDK
+sdk/dist/
+
+# misc
+.DS_Store
+*.log

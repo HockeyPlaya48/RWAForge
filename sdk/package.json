@@ -1,0 +1,33 @@
+{
+  "name": "@rwaforge/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK (viem/wagmi) for the RWAForge protocol on Robinhood Chain.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "example:distribute": "ts-node examples/distribute.ts",
+    "example:claim": "ts-node examples/claim.ts"
+  },
+  "dependencies": {
+    "viem": "^2.13.0"
+  },
+  "peerDependencies": {
+    "wagmi": "^2.9.0"
+  },
+  "peerDependenciesMeta": {
+    "wagmi": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.12.7",
+    "dotenv": "^16.4.5"
+  }
+}

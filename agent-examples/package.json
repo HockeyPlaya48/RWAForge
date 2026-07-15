@@ -1,0 +1,17 @@
+{
+  "name": "@rwaforge/agent-examples",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "distribute": "ts-node erc4337-agent-distribution.ts"
+  },
+  "dependencies": {
+    "viem": "^2.13.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

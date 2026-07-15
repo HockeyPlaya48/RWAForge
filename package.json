@@ -1,0 +1,20 @@
+{
+  "name": "rwaforge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Agent-native infrastructure for distributing tokenized RWAs and stock tokens on Robinhood Chain.",
+  "license": "MIT",
+  "workspaces": [
+    "contracts",
+    "sdk",
+    "dashboard"
+  ],
+  "scripts": {
+    "contracts:compile": "npm run compile --workspace=contracts",
+    "contracts:test": "npm run test --workspace=contracts",
+    "contracts:deploy:testnet": "npm run deploy:testnet --workspace=contracts",
+    "contracts:deploy:mainnet": "npm run deploy:mainnet --workspace=contracts",
+    "sdk:build": "npm run build --workspace=sdk",
+    "dashboard:dev": "npm run dev --workspace=dashboard"
+  }
+}

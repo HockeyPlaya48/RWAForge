@@ -1,0 +1,23 @@
+{
+  "name": "@rwaforge/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network robinhoodTestnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network robinhoodMainnet",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.2",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.2",
+    "typescript": "^5.4.5",
+    "ts-node": "^10.9.2",
+    "merkletreejs": "^0.4.0",
+    "keccak256": "^1.0.6"
+  }
+}
