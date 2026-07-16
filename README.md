@@ -198,7 +198,9 @@ cp sdk/.env.example sdk/.env.local 2>/dev/null || true
 cp dashboard/.env.example dashboard/.env.local
 ```
 
-For a full walkthrough of deploying to Robinhood Chain testnet (chain ID `46630`), see **[DEPLOYMENT.md](DEPLOYMENT.md)**. The short version:
+**Just want to integrate, not deploy?** You don't need to run a deployment at all — a full protocol instance is already live on Robinhood Chain Testnet (see [Deployed Contracts (Testnet)](#deployed-contracts-testnet) above), and those addresses are already wired into `sdk/src/config.ts`. Skip straight to the [Integration guide](#integration-guide) below: install `@rwaforge/sdk`, point at `robinhoodChainTestnet`, and you're calling real, live contracts in a few minutes.
+
+For a full walkthrough of deploying your *own* instance to Robinhood Chain testnet (chain ID `46630`), see **[DEPLOYMENT.md](DEPLOYMENT.md)**. The short version:
 
 ```bash
 cp contracts/.env.example contracts/.env   # fill in PRIVATE_KEY, TREASURY_OWNER, etc.
@@ -230,14 +232,10 @@ const wallet = createWalletClient({
   transport: http(process.env.RH_RPC_URL),
 });
 
-const forge = createRwaForgeClient({
-  wallet,
-  chain: robinhoodChainTestnet,
-  addresses: {
-    distributionRouter: "0xYourDistributionRouterAddress",
-    rewardClaimer: "0xYourRewardClaimerAddress",
-  },
-});
+// No `addresses` override needed — chain 46630's DistributionRouter and
+// RewardClaimer addresses are already baked into the SDK (see
+// sdk/src/config.ts). Pass `addresses` only if you deployed your own instance.
+const forge = createRwaForgeClient({ wallet, chain: robinhoodChainTestnet });
 
 // Distribute a stock token to a batch of recipients — handles the
 // approve-for-(amount+fee) step automatically.
