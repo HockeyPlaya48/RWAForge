@@ -18,5 +18,15 @@
   "governance": {
     "treasuryOwner": "0x17dab129866A8FD16F5043312EB337f26Da00650",
     "teamBeneficiary": "0x17dab129866A8FD16F5043312EB337f26Da00650"
+  },
+  "governanceMigration": {
+    "migratedAt": "2026-07-16T15:10:00.000Z",
+    "note": "Ownership of ForgeToken/TeamVesting/DistributionRouter/RewardClaimer, and Treasury's DEFAULT_ADMIN_ROLE + GOVERNANCE_ROLE, were transferred from the deployer EOA to a Safe multisig via scripts/migrate-governance.ts. The deployer EOA has no remaining privileged access.",
+    "safe": "0xc18a5c568FD21dde02a3bad50d411ADd9A486374",
+    "safeThreshold": "2 of 2",
+    "safeSigners": [
+      "0x4f017F4bAe250A607eA166F9aF670EC1bDb276F2",
+      "0x17dab129866A8FD16F5043312EB337f26Da00650"
+    ]
   }
 }

@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "outDir": "dist"
   },
-  "include": ["./scripts", "./test", "./hardhat.config.ts"]
+  "include": ["./scripts", "./test", "./hardhat.config.ts", "./typechain-types"]
 }

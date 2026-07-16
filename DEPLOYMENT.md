@@ -81,16 +81,28 @@ Copy the addresses from `contracts/deployments/robinhoodTestnet.json` into:
 - [`sdk/src/config.ts`](sdk/src/config.ts) — add an entry to the `deployments` map for chain ID `46630`.
 - `dashboard/.env.local` (`cp dashboard/.env.example dashboard/.env.local` first) — `NEXT_PUBLIC_DISTRIBUTION_ROUTER_ADDRESS`, `NEXT_PUBLIC_REWARD_CLAIMER_ADDRESS`, `NEXT_PUBLIC_FORGE_TOKEN_ADDRESS`.
 
-## 7. Post-deploy setup (as needed)
+## 7. Migrate governance to a multisig
+
+The deploy script sets `TREASURY_OWNER` as owner/admin everywhere, which for a first deploy is usually a single EOA. Before this deployment controls anything of real value, move governance to a [Safe](https://app.safe.global) multisig (confirmed supported on both Robinhood Chain and Robinhood Testnet):
+
+1. Create a Safe at [app.safe.global](https://app.safe.global) on the matching network, with at least 2 owners and a threshold > 1.
+2. Run the migration script against your deployment:
+   ```bash
+   NEW_GOVERNANCE_OWNER=0xYourSafeAddress npx hardhat run scripts/migrate-governance.ts --network robinhoodTestnet
+   ```
+   This transfers ownership of `ForgeToken`, `TeamVesting`, `DistributionRouter`, and `RewardClaimer`, and moves `Treasury`'s `DEFAULT_ADMIN_ROLE`/`GOVERNANCE_ROLE` to the Safe — then revokes those roles from the original signer. It's idempotent: safe to re-run, it skips anything already migrated.
+3. Verify onchain (don't just trust the script's own output) — read `owner()` on each `Ownable` contract and `hasRole()` on `Treasury` to confirm the Safe holds control and the old EOA doesn't.
+
+## 8. Post-deploy setup (as needed)
 
 - **Grant a Treasury operator**: `Treasury.grantRole(OPERATOR_ROLE, keeperOrAgentAddress)` so an automated process can call `executeSwap`.
 - **Approve RWA swap targets**: `Treasury.setSupportedRWA(rwaTokenAddress, true)` for each stock/RWA token you want fees swapped into.
 - **Publish a claim round**: fund `RewardClaimer` with tokens, then `RewardClaimer.updateMerkleRoot(root)` with a root built via [`sdk/src/merkle.ts`](sdk/src/merkle.ts) (`claimLeaf`) or `merkletreejs`.
 - **Sanity-check a distribution**: call `DistributionRouter.distribute` with a tiny amount to a test recipient before running it against real value.
 
-## 8. Verify on a block explorer (optional)
+## 9. Verify on a block explorer (optional)
 
-If a Blockscout/Etherscan-compatible explorer is available for Robinhood Chain Testnet, fill in `RH_TESTNET_EXPLORER_API_URL` / `RH_TESTNET_EXPLORER_BROWSER_URL` in `contracts/.env`, then:
+Robinhood Chain Testnet has a live Blockscout explorer at [explorer.testnet.chain.robinhood.com](https://explorer.testnet.chain.robinhood.com/). Set `RH_TESTNET_EXPLORER_API_URL`/`RH_TESTNET_EXPLORER_BROWSER_URL` in `contracts/.env` to that instance's API, then:
 
 ```bash
 npx hardhat verify --network robinhoodTestnet <contract_address> <constructor_args...>
@@ -104,4 +116,4 @@ Once testnet behavior is validated (and ideally after an audit — see [TODO.md]
 npm run contracts:deploy:mainnet
 ```
 
-Use a multisig for `TREASURY_OWNER` on mainnet, not a single EOA.
+Use a Safe multisig (step 7 above, Safe confirmed supported on Robinhood Chain mainnet too) for `TREASURY_OWNER` on mainnet — never a single EOA.

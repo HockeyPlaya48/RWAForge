@@ -165,6 +165,8 @@ Live on Robinhood Chain Testnet (chain ID `46630`) — deployed via [`contracts/
 | `DistributionRouter` | [`0xC593e0Cd5c4fb653aB50Cf5521D5A060366e64ea`](https://explorer.testnet.chain.robinhood.com/address/0xC593e0Cd5c4fb653aB50Cf5521D5A060366e64ea) |
 | `RewardClaimer` | [`0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8`](https://explorer.testnet.chain.robinhood.com/address/0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8) |
 
+**Governance**: all administrative control (`ForgeToken`/`TeamVesting`/`DistributionRouter`/`RewardClaimer` ownership, and `Treasury`'s `DEFAULT_ADMIN_ROLE`/`GOVERNANCE_ROLE`) has been migrated from the original deployer key to a 2-of-2 [Safe](https://app.safe.global) multisig at [`0xc18a5c568FD21dde02a3bad50d411ADd9A486374`](https://explorer.testnet.chain.robinhood.com/address/0xc18a5c568FD21dde02a3bad50d411ADd9A486374) — verified onchain, no single key can administer these contracts anymore. See [`contracts/scripts/migrate-governance.ts`](contracts/scripts/migrate-governance.ts), the script that performed the migration and is reusable for your own deployment.
+
 This is an early, unaudited testnet deployment for integration testing — not a mainnet address book. See [TODO.md](TODO.md) for what's still required before a mainnet launch, and the full deployment record (including allocation amounts and governance addresses) at [`contracts/deployments/robinhoodTestnet.json`](contracts/deployments/robinhoodTestnet.json).
 
 ---

@@ -1,14 +1,14 @@
 # TODO / Next Steps
 
-Status: unaudited foundation, compiles clean, 20/20 tests passing, no live deployment yet. This tracks what stands between here and a real launch.
+Status: unaudited, live on Robinhood Chain **Testnet** (chain ID `46630`) with governance already migrated to a Safe multisig — see [Deployed Contracts (Testnet)](README.md#deployed-contracts-testnet). Not on mainnet. This tracks what stands between here and a real launch.
 
 ## Before any mainnet deployment (blocking)
 
 - [ ] **Independent security audit.** Nothing in `contracts/` has been reviewed by anyone but the person who wrote it. This is the single biggest gap — do not deploy with real value before one.
 - [ ] **Finalize $FORGE tokenomics.** README intentionally omits allocation percentages/fair-launch mechanics for now. `contracts/scripts/deploy.ts` currently mints a placeholder 15/30/25/30 split (team/community/liquidity/treasury) purely to demonstrate the mechanism — revisit before it's treated as real.
-- [ ] **Real Robinhood Chain endpoints.** RPC URLs, block explorer API, and ERC-4337 bundler/paymaster URLs throughout the repo (`hardhat.config.ts`, `sdk/src/config.ts`, `agent-examples/`) are best-guess placeholders based on the brief. Confirm the actual production endpoints before deploying anywhere real.
-- [ ] **Confirm Cancun/MCOPY support.** `hardhat.config.ts` targets `evmVersion: "cancun"` because OpenZeppelin Contracts 5.6+ uses the `MCOPY` opcode. Verify Robinhood Chain's EVM implementation actually supports Cancun opcodes before mainnet deploy — if not, pin `@openzeppelin/contracts` to `<5.6` and drop `evmVersion` to `"shanghai"`/`"paris"`.
-- [ ] **Multisig for governance roles.** `TREASURY_OWNER` should be a real multisig (Safe or equivalent) on mainnet, not a single EOA — the deploy script and docs assume you'll swap this in.
+- [x] ~~Real Robinhood Chain endpoints.~~ Confirmed and in use: mainnet chain ID `4663`, testnet `46630`, RPC/faucet/Blockscout explorer (`explorer.testnet.chain.robinhood.com`) all verified working against the live testnet deployment.
+- [x] ~~Confirm Cancun/MCOPY support.~~ Empirically confirmed: `evmVersion: "cancun"` compiled and deployed successfully on Robinhood Chain Testnet, all 5 contracts live and functioning. Worth a final sanity check against mainnet specifically before a real deploy there, but no longer a guess.
+- [x] ~~Multisig for governance roles (testnet).~~ Done — testnet governance (ownership of `ForgeToken`/`TeamVesting`/`DistributionRouter`/`RewardClaimer`, plus `Treasury`'s admin roles) migrated from the deployer EOA to a 2-of-2 Safe at `0xc18a5c568FD21dde02a3bad50d411ADd9A486374`, verified onchain. **Still needed for mainnet**: a separate Safe deployed on Robinhood Chain mainnet (Safe confirmed supported there too), ideally with a higher threshold (2-of-3+) than the testnet rehearsal's 2-of-2 — see the note on 2-of-2 risk in the deployment history. Use [`contracts/scripts/migrate-governance.ts`](contracts/scripts/migrate-governance.ts) again for that migration.
 
 ## Should do before wider use
 
@@ -25,7 +25,7 @@ Status: unaudited foundation, compiles clean, 20/20 tests passing, no live deplo
 - [ ] **wagmi hooks package.** `sdk/` is a plain viem-based SDK; a thin `@rwaforge/sdk/react` layer with `useDistribute`/`useClaim` hooks would make dashboard-style integrations faster to build.
 - [ ] **CI.** No GitHub Actions workflow yet for `npm run contracts:compile` / `contracts:test` / SDK typecheck on PRs.
 - [ ] **Real dependency audit.** `npm install` currently surfaces ~40-65 `npm audit` warnings, mostly from the wagmi/WalletConnect dependency tree in `dashboard/`. Not investigated — worth a pass before shipping the dashboard publicly.
-- [ ] **Block explorer verification config.** `hardhat.config.ts` has `etherscan.customChains` entries wired up but empty (`RH_EXPLORER_API_URL`, etc.) — fill in once a Robinhood Chain explorer instance is confirmed.
+- [ ] **Block explorer verification config.** `hardhat.config.ts` has `etherscan.customChains` entries wired up but empty. The testnet explorer is confirmed live at `explorer.testnet.chain.robinhood.com` (Blockscout) — fill in `RH_TESTNET_EXPLORER_API_URL`/`RH_TESTNET_EXPLORER_BROWSER_URL` and run `hardhat verify` against the current testnet deployment; mainnet explorer URL still needs confirming.
 
 ## Explicitly out of scope for this repo (by design)
 
