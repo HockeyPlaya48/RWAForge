@@ -36,5 +36,12 @@ export interface RwaForgeDeployment {
 
 export const deployments: Partial<Record<number, RwaForgeDeployment>> = {
   // 4663: { forgeToken: "0x...", teamVesting: "0x...", treasury: "0x...", distributionRouter: "0x...", rewardClaimer: "0x..." },
-  // 46630: { forgeToken: "0x...", teamVesting: "0x...", treasury: "0x...", distributionRouter: "0x...", rewardClaimer: "0x..." },
+  46630: {
+    // Robinhood Chain Testnet — deployed 2026-07-16. See contracts/deployments/robinhoodTestnet.json.
+    forgeToken: "0x40113463a6f51937B811C9fc5B32584754CF6Abe",
+    teamVesting: "0xF380564Ed541E1119E1D8aFE6CD0aC8d29932176",
+    treasury: "0xe00F98dE07bEA9afb9Dcb457e3292E54E9E26C0B",
+    distributionRouter: "0xC593e0Cd5c4fb653aB50Cf5521D5A060366e64ea",
+    rewardClaimer: "0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8",
+  },
 };

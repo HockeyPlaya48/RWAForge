@@ -1,0 +1,22 @@
+{
+  "network": "robinhoodTestnet",
+  "chainId": 46630,
+  "deployedAt": "2026-07-16T14:23:34.802Z",
+  "contracts": {
+    "ForgeToken": "0x40113463a6f51937B811C9fc5B32584754CF6Abe",
+    "TeamVesting": "0xF380564Ed541E1119E1D8aFE6CD0aC8d29932176",
+    "Treasury": "0xe00F98dE07bEA9afb9Dcb457e3292E54E9E26C0B",
+    "DistributionRouter": "0xC593e0Cd5c4fb653aB50Cf5521D5A060366e64ea",
+    "RewardClaimer": "0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8"
+  },
+  "allocations": {
+    "team": "150000000000000000000000000",
+    "community": "300000000000000000000000000",
+    "liquidity": "250000000000000000000000000",
+    "treasury": "300000000000000000000000000"
+  },
+  "governance": {
+    "treasuryOwner": "0x17dab129866A8FD16F5043312EB337f26Da00650",
+    "teamBeneficiary": "0x17dab129866A8FD16F5043312EB337f26Da00650"
+  }
+}
