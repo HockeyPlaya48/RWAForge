@@ -153,6 +153,22 @@ Chain definitions for both networks live in [`contracts/hardhat.config.ts`](cont
 
 ---
 
+## Deployed Contracts (Testnet)
+
+Live on Robinhood Chain Testnet (chain ID `46630`) — deployed via [`contracts/scripts/deploy.ts`](contracts/scripts/deploy.ts), addresses wired into [`sdk/src/config.ts`](sdk/src/config.ts), and verified onchain (`ForgeToken.name()` returns `"RWAForge"`, `totalSupply()` is the full 1B, `DistributionRouter.feeBps()` returns the default `300`).
+
+| Contract | Address |
+|---|---|
+| `ForgeToken` | [`0x40113463a6f51937B811C9fc5B32584754CF6Abe`](https://explorer.testnet.chain.robinhood.com/address/0x40113463a6f51937B811C9fc5B32584754CF6Abe) |
+| `TeamVesting` | [`0xF380564Ed541E1119E1D8aFE6CD0aC8d29932176`](https://explorer.testnet.chain.robinhood.com/address/0xF380564Ed541E1119E1D8aFE6CD0aC8d29932176) |
+| `Treasury` | [`0xe00F98dE07bEA9afb9Dcb457e3292E54E9E26C0B`](https://explorer.testnet.chain.robinhood.com/address/0xe00F98dE07bEA9afb9Dcb457e3292E54E9E26C0B) |
+| `DistributionRouter` | [`0xC593e0Cd5c4fb653aB50Cf5521D5A060366e64ea`](https://explorer.testnet.chain.robinhood.com/address/0xC593e0Cd5c4fb653aB50Cf5521D5A060366e64ea) |
+| `RewardClaimer` | [`0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8`](https://explorer.testnet.chain.robinhood.com/address/0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8) |
+
+This is an early, unaudited testnet deployment for integration testing — not a mainnet address book. See [TODO.md](TODO.md) for what's still required before a mainnet launch, and the full deployment record (including allocation amounts and governance addresses) at [`contracts/deployments/robinhoodTestnet.json`](contracts/deployments/robinhoodTestnet.json).
+
+---
+
 ## $FORGE tokenomics — TBD
 
 Final allocation, vesting, and fair-launch mechanics have **not** been decided yet and are intentionally left out of this README so nothing here is mistaken for a commitment. What's already built and tested, mechanism-first:
