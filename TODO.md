@@ -1,6 +1,6 @@
 # TODO / Next Steps
 
-Status: unaudited, live on Robinhood Chain **Testnet** (chain ID `46630`) with governance already migrated to a Safe multisig — see [Deployed Contracts (Testnet)](README.md#deployed-contracts-testnet). Not on mainnet. This tracks what stands between here and a real launch.
+Status: unaudited, live on Robinhood Chain **Testnet** (chain ID `46630`) with governance migrated to a Safe multisig, and `@rwaforge/sdk` [published on npm](https://www.npmjs.com/package/@rwaforge/sdk) — `npm install @rwaforge/sdk` works today, verified against a clean install. Not on mainnet. This tracks what stands between here and a real launch.
 
 ## Before any mainnet deployment (blocking)
 
