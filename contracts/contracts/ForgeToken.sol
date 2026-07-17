@@ -22,6 +22,8 @@ contract ForgeToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Ownable
 
     /// @dev Thrown when a mint would push total supply above MAX_SUPPLY.
     error MaxSupplyExceeded(uint256 requested, uint256 available);
+    /// @dev Thrown when a renounceOwnership call is attempted.
+    error GovernanceCannotBeRenounced();
 
     /// @param initialOwner Address granted ownership (mint/pause rights) at deploy.
     constructor(address initialOwner)
@@ -29,6 +31,13 @@ contract ForgeToken is ERC20, ERC20Burnable, ERC20Pausable, ERC20Permit, Ownable
         ERC20Permit("RWAForge")
         Ownable(initialOwner)
     {}
+
+    /// @notice Prevents accidental renounce of ownership. The owner must
+    ///         remain able to mint the remaining supply and pause transfers
+    ///         in an emergency.
+    function renounceOwnership() public override onlyOwner {
+        revert GovernanceCannotBeRenounced();
+    }
 
     /// @notice Mint new $FORGE, bounded by MAX_SUPPLY.
     /// @dev Intended for owner-controlled initial distribution to allocation

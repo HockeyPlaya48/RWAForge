@@ -50,12 +50,21 @@ contract RewardClaimer is Ownable, ReentrancyGuard {
     error InvalidProof();
     /// @dev Thrown when a zero address is passed where a real address is required.
     error ZeroAddress();
+    /// @dev Thrown when a renounceOwnership call is attempted — governance is
+    ///      permanent for this contract.
+    error GovernanceCannotBeRenounced();
 
     /// @param token_ Token distributed by this claimer.
     /// @param initialOwner Address granted ownership (root-update/sweep rights) at deploy.
     constructor(IERC20 token_, address initialOwner) Ownable(initialOwner) {
         if (address(token_) == address(0)) revert ZeroAddress();
         token = token_;
+    }
+
+    /// @notice Prevents accidental renounce of ownership. Governance must
+    ///         remain able to publish Merkle roots and sweep tokens.
+    function renounceOwnership() public override onlyOwner {
+        revert GovernanceCannotBeRenounced();
     }
 
     /// @notice Whether `index` has been claimed in the current epoch.
