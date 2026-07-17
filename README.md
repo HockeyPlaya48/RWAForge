@@ -79,32 +79,32 @@ More agents building on RWAForge means more distributions flowing through `Distr
 ## Architecture
 
 ```
-                         ┌──────────────────-───┐
-                         │      ForgeToken      │  ERC-20, fixed supply cap, pausable
-                         │        ($FORGE)      │
-                         └──────────┬───────────┘
-                                    │ vests to team via
-                                    ▼
-                         ┌─────────────────────┐
-                         │     TeamVesting     │  1yr cliff / 3yr linear
-                         └─────────────────────┘
+┌───────────────────────────┐
+│    ForgeToken ($FORGE)    │  ERC-20, fixed supply cap, pausable
+└───────────────────────────┘
+              │  vests to team via
+              ▼
+┌───────────────────────────┐
+│        TeamVesting        │  1yr cliff / 3yr linear
+└───────────────────────────┘
 
-  Agent / dApp / User
-         │
-         │ distribute(token, recipients[], amounts[])
-         ▼
-┌─────────────────────┐     protocol fee       ┌───────────────--──────┐
-│  DistributionRouter │  ───────────────────>  │       Treasury        │
-│  batch sends, fee   │                        │  fee collection,      │
-│ logic, ERC-4337 safe│                        │  RWA swaps, holdings  │
-└─────────────────────┘                        └──────────┬────────-───┘
-                                                            │ funds
-                                                            ▼
-                                                 ┌─────────────────────┐
-                                                 │    RewardClaimer    │
-                                                 │  Merkle claims,     │
-                                                 │ agent-relayed claims│
-                                                 └─────────────────────┘
+Agent / dApp / User
+              │
+              │  distribute(token, recipients[], amounts[])
+              ▼
+┌───────────────────────────┐
+│    DistributionRouter     │  batch sends, fee logic, ERC-4337 safe
+└───────────────────────────┘
+              │  protocol fee
+              ▼
+┌───────────────────────────┐
+│         Treasury          │  fee collection, RWA swaps, holdings
+└───────────────────────────┘
+              │  funds
+              ▼
+┌───────────────────────────┐
+│       RewardClaimer       │  Merkle claims, agent-relayed claims
+└───────────────────────────┘
 ```
 
 | Contract | Purpose |
