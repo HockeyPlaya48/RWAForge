@@ -276,6 +276,10 @@ Both calls succeed or fail together, so the agent's payout is atomic. See [`agen
 
 ### For the dashboard
 
+**Live: [rwaforge.vercel.app](https://rwaforge.vercel.app)** — connect a wallet and try it against the real testnet deployment, no setup required.
+
+To run it locally instead:
+
 ```bash
 cd dashboard
 npm install
