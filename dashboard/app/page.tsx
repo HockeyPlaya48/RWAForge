@@ -1,5 +1,6 @@
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { DashboardTabs } from "@/components/DashboardTabs";
+import { GetStarted } from "@/components/GetStarted";
 
 export default function Home() {
   return (
@@ -32,6 +33,10 @@ export default function Home() {
         <span className="text-slate-200">Holders and agents</span> check their rewards below;{" "}
         <span className="text-slate-200">protocols sending payouts</span> use Operator Tools.
       </p>
+
+      <div className="mt-8">
+        <GetStarted />
+      </div>
 
       <DashboardTabs />
 
