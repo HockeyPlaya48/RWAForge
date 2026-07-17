@@ -12,6 +12,11 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 ///      instance per beneficiary if the team allocation is split across people.
 ///      Kept intentionally simple/auditable rather than pulling in a generic
 ///      multi-schedule vesting framework.
+///
+///      totalAllocation is stored at construction time so that extra tokens
+///      accidentally sent to this contract (airdrops, governance mistakes) are
+///      NOT automatically claimable by the beneficiary. Only the amount the
+///      deployer explicitly allocates vests.
 contract TeamVesting is Ownable {
     using SafeERC20 for IERC20;
 
@@ -29,6 +34,11 @@ contract TeamVesting is Ownable {
 
     /// @notice Total vesting duration in seconds (3 years), measured from startTimestamp.
     uint64 public immutable vestingDuration;
+
+    /// @notice Total amount allocated to this vesting schedule at construction time.
+    ///         Used instead of live balanceOf to prevent extra tokens sent to
+    ///         the contract from becoming vested and claimable.
+    uint256 public immutable totalAllocation;
 
     /// @notice Total amount ever released to the beneficiary.
     uint256 public released;
@@ -49,13 +59,16 @@ contract TeamVesting is Ownable {
     /// @param startTimestamp_ When vesting begins accruing (typically TGE).
     /// @param cliffDuration_ Seconds before which nothing is releasable (1 year = 365 days).
     /// @param vestingDuration_ Total seconds over which the full amount vests (3 years).
+    /// @param totalAllocation_ Total token amount allocated to this vesting schedule.
+    ///        Should match the amount transferred to this contract after deployment.
     constructor(
         IERC20 token_,
         address beneficiary_,
         address owner_,
         uint64 startTimestamp_,
         uint64 cliffDuration_,
-        uint64 vestingDuration_
+        uint64 vestingDuration_,
+        uint256 totalAllocation_
     ) Ownable(owner_) {
         if (beneficiary_ == address(0) || address(token_) == address(0)) revert ZeroAddress();
         token = token_;
@@ -63,6 +76,7 @@ contract TeamVesting is Ownable {
         startTimestamp = startTimestamp_;
         cliffDuration = cliffDuration_;
         vestingDuration = vestingDuration_;
+        totalAllocation = totalAllocation_;
     }
 
     /// @notice Amount of tokens vested (releasable + already released) at the current time.
@@ -92,10 +106,12 @@ contract TeamVesting is Ownable {
     }
 
     /// @dev Linear vesting from `startTimestamp`, zero before the cliff, full amount at/after `vestingEnd`.
+    ///      Uses the stored `totalAllocation` (set at construction) rather than
+    ///      the live contract balance, so extra tokens sent to this contract
+    ///      after deployment are never claimable by the beneficiary.
     /// @param timestamp Point in time to evaluate the schedule at.
     /// @return The cumulative amount vested as of `timestamp`.
     function _vestedAmount(uint64 timestamp) internal view returns (uint256) {
-        uint256 totalAllocation = released + token.balanceOf(address(this));
         uint64 cliffEnd = startTimestamp + cliffDuration;
 
         if (timestamp < cliffEnd) {
