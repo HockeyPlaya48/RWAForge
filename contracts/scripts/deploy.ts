@@ -49,7 +49,8 @@ async function main() {
     treasuryOwner,
     startTimestamp,
     ONE_YEAR,
-    THREE_YEARS
+    THREE_YEARS,
+    ALLOCATIONS.team
   );
   await teamVesting.waitForDeployment();
   const teamVestingAddress = await teamVesting.getAddress();
