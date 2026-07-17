@@ -79,31 +79,31 @@ More agents building on RWAForge means more distributions flowing through `Distr
 ## Architecture
 
 ```
-                         ┌─────────────────────┐
+                         ┌──────────────────-───┐
                          │      ForgeToken      │  ERC-20, fixed supply cap, pausable
                          │        ($FORGE)      │
                          └──────────┬───────────┘
                                     │ vests to team via
                                     ▼
                          ┌─────────────────────┐
-                         │     TeamVesting      │  1yr cliff / 3yr linear
+                         │     TeamVesting     │  1yr cliff / 3yr linear
                          └─────────────────────┘
 
   Agent / dApp / User
          │
          │ distribute(token, recipients[], amounts[])
          ▼
-┌─────────────────────┐     protocol fee      ┌─────────────────────┐
-│  DistributionRouter   │ ─────────────────────▶│       Treasury        │
-│  batch sends, fee     │                        │  fee collection,      │
-│  logic, ERC-4337 safe │                        │  RWA swaps, holdings  │
-└─────────────────────┘                        └──────────┬───────────┘
+┌─────────────────────┐     protocol fee       ┌───────────────--──────┐
+│  DistributionRouter │  ───────────────────>  │       Treasury        │
+│  batch sends, fee   │                        │  fee collection,      │
+│ logic, ERC-4337 safe│                        │  RWA swaps, holdings  │
+└─────────────────────┘                        └──────────┬────────-───┘
                                                             │ funds
                                                             ▼
                                                  ┌─────────────────────┐
-                                                 │    RewardClaimer      │
-                                                 │  Merkle claims,        │
-                                                 │  agent-relayed claims  │
+                                                 │    RewardClaimer    │
+                                                 │  Merkle claims,     │
+                                                 │ agent-relayed claims│
                                                  └─────────────────────┘
 ```
 
