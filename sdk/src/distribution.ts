@@ -1,4 +1,4 @@
-import type { Address, PublicClient, WalletClient } from "viem";
+import type { Address, PublicClient, TransactionReceipt, WalletClient } from "viem";
 import { distributionRouterAbi } from "./abis/distributionRouter";
 import { erc20Abi } from "./abis/erc20";
 
@@ -17,6 +17,13 @@ export interface DistributionModuleConfig {
   distributionRouterAddress: Address;
 }
 
+export interface DistributionModule {
+  quoteRequiredApproval(amounts: bigint[]): Promise<bigint>;
+  approve(token: Address, amounts: bigint[]): Promise<TransactionReceipt>;
+  distribute(params: DistributeParams): Promise<TransactionReceipt>;
+  approveAndDistribute(params: DistributeParams): Promise<TransactionReceipt>;
+}
+
 /**
  * Thin wrapper around DistributionRouter. Handles the approve-then-distribute
  * flow so callers don't have to reason about the router's fee-on-top model
@@ -26,7 +33,7 @@ export function createDistributionModule({
   walletClient,
   publicClient,
   distributionRouterAddress,
-}: DistributionModuleConfig) {
+}: DistributionModuleConfig): DistributionModule {
   return {
     /**
      * Reads the current fee (bps) and returns the total amount the caller

@@ -1,6 +1,6 @@
-import { createPublicClient, http, type Address, type Chain, type WalletClient } from "viem";
-import { createDistributionModule } from "./distribution";
-import { createClaimsModule } from "./claims";
+import { createPublicClient, http, type Address, type Chain, type PublicClient, type WalletClient } from "viem";
+import { createDistributionModule, type DistributionModule } from "./distribution";
+import { createClaimsModule, type ClaimsModule } from "./claims";
 import { deployments, robinhoodChainMainnet, robinhoodChainTestnet } from "./config";
 
 export { robinhoodChainMainnet, robinhoodChainTestnet, deployments } from "./config";
@@ -9,6 +9,8 @@ export { claimLeaf } from "./merkle";
 export { erc20Abi, distributionRouterAbi, rewardClaimerAbi } from "./abis";
 export type { DistributeParams } from "./distribution";
 export type { ClaimParams, ClaimForParams } from "./claims";
+export type { DistributionModule } from "./distribution";
+export type { ClaimsModule } from "./claims";
 
 export interface CreateRwaForgeClientParams {
   wallet: WalletClient;
@@ -22,6 +24,13 @@ export interface CreateRwaForgeClientParams {
   rpcUrl?: string;
 }
 
+export interface RwaForgeClient {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  distribution?: DistributionModule;
+  claims?: ClaimsModule;
+}
+
 /**
  * Creates a bundled RWAForge client: a wallet client's write access plus a
  * public client for reads, wired to the DistributionRouter and RewardClaimer
@@ -29,7 +38,7 @@ export interface CreateRwaForgeClientParams {
  * address book (useful for local/testnet development before addresses are
  * published).
  */
-export function createRwaForgeClient({ wallet, chain, addresses, rpcUrl }: CreateRwaForgeClientParams) {
+export function createRwaForgeClient({ wallet, chain, addresses, rpcUrl }: CreateRwaForgeClientParams): RwaForgeClient {
   const deployment = deployments[chain.id];
   const distributionRouterAddress = addresses?.distributionRouter ?? deployment?.distributionRouter;
   const rewardClaimerAddress = addresses?.rewardClaimer ?? deployment?.rewardClaimer;

@@ -1,4 +1,4 @@
-import type { Address, PublicClient, WalletClient } from "viem";
+import type { Address, PublicClient, TransactionReceipt, WalletClient } from "viem";
 import { rewardClaimerAbi } from "./abis/rewardClaimer";
 
 export interface ClaimParams {
@@ -17,6 +17,12 @@ export interface ClaimsModuleConfig {
   rewardClaimerAddress: Address;
 }
 
+export interface ClaimsModule {
+  isClaimed(index: bigint): Promise<boolean>;
+  claim(params: ClaimParams): Promise<TransactionReceipt>;
+  claimFor(params: ClaimForParams): Promise<TransactionReceipt>;
+}
+
 /**
  * Thin wrapper around RewardClaimer. `claim` is self-service (the connected
  * account receives the funds); `claimFor` is the agent-friendly path — any
@@ -26,7 +32,7 @@ export function createClaimsModule({
   walletClient,
   publicClient,
   rewardClaimerAddress,
-}: ClaimsModuleConfig) {
+}: ClaimsModuleConfig): ClaimsModule {
   return {
     async isClaimed(index: bigint): Promise<boolean> {
       return publicClient.readContract({
