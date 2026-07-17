@@ -1,6 +1,5 @@
 import { ConnectWallet } from "@/components/ConnectWallet";
-import { CreateDistribution } from "@/components/CreateDistribution";
-import { ClaimRewards } from "@/components/ClaimRewards";
+import { DashboardTabs } from "@/components/DashboardTabs";
 
 export default function Home() {
   return (
@@ -15,10 +14,13 @@ export default function Home() {
         <ConnectWallet />
       </header>
 
-      <div className="mt-10 space-y-6">
-        <CreateDistribution />
-        <ClaimRewards />
-      </div>
+      <p className="mt-6 max-w-xl text-sm text-slate-400">
+        Distribute and claim tokenized RWAs and stock rewards on Robinhood Chain.
+        Holders and agents check <span className="text-slate-200">My Rewards</span>; protocols sending
+        payouts use <span className="text-slate-200">Operator Tools</span>.
+      </p>
+
+      <DashboardTabs />
 
       <footer className="mt-10 text-center text-xs text-slate-600">
         Example dashboard for RWAForge — configure contract addresses in{" "}

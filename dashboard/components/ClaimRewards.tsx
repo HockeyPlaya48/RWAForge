@@ -50,10 +50,13 @@ export function ClaimRewards() {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-      <h2 className="text-lg font-semibold text-slate-100">Claim Rewards</h2>
+    <details className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+      <summary className="cursor-pointer text-lg font-semibold text-slate-100">
+        Advanced: manual claim
+      </summary>
       <p className="mt-1 text-sm text-slate-400">
-        Claim a Merkle-based reward from RewardClaimer using your allocation's index, amount, and proof.
+        For claiming a reward not yet in the bundled round data (see "My Rewards" for the automatic version) — enter your
+        allocation's index, amount, and proof directly against RewardClaimer.
       </p>
 
       <label className="mt-4 block text-sm text-slate-300">Index</label>
@@ -90,6 +93,6 @@ export function ClaimRewards() {
       </button>
 
       {status && <p className="mt-3 break-all text-xs text-slate-400">{status}</p>}
-    </div>
+    </details>
   );
 }
