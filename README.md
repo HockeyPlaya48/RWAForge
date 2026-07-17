@@ -283,7 +283,9 @@ cp .env.example .env.local   # fill in deployed contract addresses
 npm run dev
 ```
 
-A minimal Next.js app (wagmi + viem, dark navy/mint theme) that connects a wallet, lets an operator create a batch distribution, and lets a user claim a Merkle reward. See [`dashboard/app/page.tsx`](dashboard/app/page.tsx) and [`dashboard/lib/wagmi.ts`](dashboard/lib/wagmi.ts) for wiring.
+A minimal Next.js app (wagmi + viem, dark navy/mint theme) that connects a wallet, lets an operator create a batch distribution, and lets a user claim a Merkle reward. See [`dashboard/app/page.tsx`](dashboard/app/page.tsx) and [`dashboard/lib/wagmi.ts`](dashboard/lib/wagmi.ts) for wiring. Verified end-to-end on testnet: fund → publish a Merkle round → claim through this exact UI against a real wallet.
+
+> **"Connect Wallet" doing nothing?** If you have more than one wallet browser extension installed (MetaMask + Phantom/Rabby/Coinbase Wallet/etc.), they can conflict over the `window.ethereum` global every dapp uses to detect a wallet. Check the browser console for `Cannot set property ethereum` or `Cannot redefine property: ethereum` — if you see that, disable all wallet extensions except the one you want to use and reload the page. Not a bug in this repo; it's a known multi-wallet-extension conflict.
 
 ### For other teams forking this protocol
 
