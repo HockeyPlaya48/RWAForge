@@ -106,6 +106,9 @@ contract Treasury is AccessControl, ReentrancyGuard {
 
     /// @notice Withdraw tokens from the treasury — e.g. to fund a new RewardClaimer
     ///         Merkle round, or for approved operational spend.
+    /// @dev Updates rwaHoldings by at most the tracked amount, never going below
+    ///      zero, so the accounting stays accurate even when the withdrawal exceeds
+    ///      tracked holdings (e.g. untracked fee tokens).
     /// @param token Token to withdraw.
     /// @param to Recipient of the withdrawn tokens.
     /// @param amount Amount to withdraw.
@@ -117,10 +120,13 @@ contract Treasury is AccessControl, ReentrancyGuard {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
 
-        if (rwaHoldings[token] >= amount) {
-            rwaHoldings[token] -= amount;
-        } else if (rwaHoldings[token] > 0) {
-            rwaHoldings[token] = 0;
+        // Reduce rwaHoldings by up to amount, but never below zero — the
+        // contract may hold untracked fee tokens beyond what rwaHoldings
+        // records, and that excess should not distort the RWA tracker.
+        uint256 tracked = rwaHoldings[token];
+        if (tracked > 0) {
+            uint256 deduction = amount < tracked ? amount : tracked;
+            rwaHoldings[token] = tracked - deduction;
         }
 
         emit Withdrawal(token, to, amount);
