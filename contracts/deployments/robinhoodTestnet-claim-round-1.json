@@ -1,0 +1,23 @@
+{
+  "root": "0x1a0572849a7150cbf168cbe5a35e5e87d327c625c082f8a257aa21eb2bc56a0d",
+  "rewardClaimer": "0x88Eb6EC80CdbA56777a9d7c3c18F29193F17DFb8",
+  "forgeToken": "0x40113463a6f51937B811C9fc5B32584754CF6Abe",
+  "entries": [
+    {
+      "index": "0",
+      "account": "0x4f017F4bAe250A607eA166F9aF670EC1bDb276F2",
+      "amount": "500000000000000000000",
+      "proof": [
+        "0x3f216ac49173e6b3475e45fa07ac22130b973a9bd9eab3a25e844d543306065e"
+      ]
+    },
+    {
+      "index": "1",
+      "account": "0x17dab129866A8FD16F5043312EB337f26Da00650",
+      "amount": "500000000000000000000",
+      "proof": [
+        "0x89df589d5a37ee5016c8107eeb334c8e734c0ac9ce97c8a0ff2b0acd3f121e58"
+      ]
+    }
+  ]
+}
