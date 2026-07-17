@@ -51,7 +51,7 @@ export function ClaimRewards() {
 
   return (
     <details className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-      <summary className="cursor-pointer text-lg font-semibold text-slate-100">
+      <summary className="cursor-pointer text-base font-semibold text-slate-100">
         Advanced: manual claim
       </summary>
       <p className="mt-1 text-sm text-slate-400">
@@ -87,7 +87,7 @@ export function ClaimRewards() {
       <button
         onClick={handleClaim}
         disabled={!isConnected || submitting}
-        className="mt-6 w-full rounded-lg border border-mint px-4 py-2 text-sm font-medium text-mint hover:bg-mint hover:text-navy transition-colors disabled:opacity-50"
+        className="mt-6 w-full rounded-lg border border-mint px-4 py-2 text-sm font-medium text-mint hover:bg-mint-bright hover:text-navy transition-colors disabled:opacity-50"
       >
         {submitting ? "Claiming..." : "Claim"}
       </button>

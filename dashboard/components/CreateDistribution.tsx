@@ -79,7 +79,7 @@ export function CreateDistribution() {
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-      <h2 className="text-lg font-semibold text-slate-100">Create Distribution</h2>
+      <h2 className="text-base font-semibold text-slate-100">Create Distribution</h2>
       <p className="mt-1 text-sm text-slate-400">
         Batch-send an RWA/stock token to multiple recipients through DistributionRouter.
       </p>
@@ -125,7 +125,7 @@ export function CreateDistribution() {
       <button
         onClick={handleSubmit}
         disabled={!isConnected || submitting}
-        className="mt-6 w-full rounded-lg bg-mint px-4 py-2 text-sm font-medium text-navy hover:bg-mint/90 transition-colors disabled:opacity-50"
+        className="mt-6 w-full rounded-lg bg-mint px-4 py-2 text-sm font-medium text-navy hover:bg-mint-bright transition-colors disabled:opacity-50"
       >
         {submitting ? "Submitting..." : "Distribute"}
       </button>

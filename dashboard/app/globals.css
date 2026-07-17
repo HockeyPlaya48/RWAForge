@@ -6,7 +6,7 @@
   color-scheme: dark;
 }
 
-body {
-  background-color: #0f172a;
-  color: #f1f5f9;
+::selection {
+  background-color: #14b8a6;
+  color: #0f172a;
 }
