@@ -1,33 +1,61 @@
 # TODO / Next Steps
 
-Status: unaudited, live on Robinhood Chain **Testnet** (chain ID `46630`) with governance migrated to a Safe multisig, and `@rwaforge/sdk` [published on npm](https://www.npmjs.com/package/@rwaforge/sdk) — `npm install @rwaforge/sdk` works today, verified against a clean install. Not on mainnet. This tracks what stands between here and a real launch.
+Status: unaudited, live on Robinhood Chain **Testnet** (chain ID `46630`) with governance migrated to a Safe multisig, and `@rwaforge/sdk` [published on npm](https://www.npmjs.com/package/@rwaforge/sdk). Not on mainnet yet.
 
-## Before any mainnet deployment (blocking)
+---
 
-- [ ] **Independent security audit.** Nothing in `contracts/` has been reviewed by anyone but the person who wrote it. This is the single biggest gap — do not deploy with real value before one.
-- [ ] **Finalize $FORGE tokenomics.** README intentionally omits allocation percentages/fair-launch mechanics for now. `contracts/scripts/deploy.ts` currently mints a placeholder 15/30/25/30 split (team/community/liquidity/treasury) purely to demonstrate the mechanism — revisit before it's treated as real.
-- [x] ~~Real Robinhood Chain endpoints.~~ Confirmed and in use: mainnet chain ID `4663`, testnet `46630`, RPC/faucet/Blockscout explorer (`explorer.testnet.chain.robinhood.com`) all verified working against the live testnet deployment.
-- [x] ~~Confirm Cancun/MCOPY support.~~ Empirically confirmed: `evmVersion: "cancun"` compiled and deployed successfully on Robinhood Chain Testnet, all 5 contracts live and functioning. Worth a final sanity check against mainnet specifically before a real deploy there, but no longer a guess.
-- [x] ~~Multisig for governance roles (testnet).~~ Done — testnet governance (ownership of `ForgeToken`/`TeamVesting`/`DistributionRouter`/`RewardClaimer`, plus `Treasury`'s admin roles) migrated from the deployer EOA to a 2-of-2 Safe at `0xc18a5c568FD21dde02a3bad50d411ADd9A486374`, verified onchain. **Still needed for mainnet**: a separate Safe deployed on Robinhood Chain mainnet (Safe confirmed supported there too), ideally with a higher threshold (2-of-3+) than the testnet rehearsal's 2-of-2 — see the note on 2-of-2 risk in the deployment history. Use [`contracts/scripts/migrate-governance.ts`](contracts/scripts/migrate-governance.ts) again for that migration.
+## v1 / v2 — Ship this (core product)
 
-## Should do before wider use
+**What it is**: Users claim tokenized stocks/RWAs distributed by protocols they use. They browse live prediction markets on the Predict tab and trade directly in the dashboard via Polymarket embed. Protocols (Sairi, Atelier, Bankr) use `DistributionRouter` + SDK to push tokenized stock rewards to their holders and users.
 
-- [ ] **Gas benchmarking on `DistributionRouter.distribute`.** It does `recipients.length + 1` separate `transferFrom` calls (no internal pooling), which is simple and safe but not the cheapest possible design at large batch sizes. `MAX_BATCH_SIZE = 500` is a guess, not a measured gas-limit-safe number for Robinhood Chain specifically — profile and adjust.
-- [ ] **Decide the real swap router adapter.** `IRWASwapRouter` is a deliberately minimal interface; `Treasury.executeSwap` currently has nothing production-grade behind it (only `MockSwapRouter` for tests). Needs a real adapter for whatever DEX/aggregator exists on Robinhood Chain.
-- [ ] **Staking contract.** Referenced in the original product brief ("staking for boosted claims/revenue share") but not built — no staking contract exists yet in this repo.
-- [ ] **Governance contract.** Ownership/roles are currently plain `Ownable`/`AccessControl`, transferable to a DAO governor later but no governor contract is included.
-- [ ] **Fee-on-transfer / rebasing token handling.** `DistributionRouter` and `Treasury` assume standard ERC-20 transfer semantics (amount sent == amount received). Confirm Robinhood Chain stock tokens/RWAs behave this way, or add balance-delta accounting if not.
-- [ ] **Merkle tree generation tooling.** `sdk/src/merkle.ts` exposes the leaf-hashing function, but there's no CLI/script yet to take a CSV of `(account, amount)` pairs and produce a root + per-user proofs for `RewardClaimer.updateMerkleRoot`. Needed before running a real claim round.
+### Blocking for mainnet
 
-## Nice to have
+- [ ] **Security audits complete.** 6 contracts submitted to [onedollaraudit.com](https://www.onedollaraudit.com) — awaiting reports. Do not deploy with real value until all clear. Contracts in scope: `ForgeToken`, `TeamVesting`, `DistributionRouter`, `Treasury`, `RewardClaimer`, `PredictVault`.
+- [ ] **Finalize $FORGE tokenomics.** Placeholder 15/30/25/30 split in `contracts/scripts/deploy.ts` — decide real allocation before mainnet.
+- [ ] **Mainnet Safe multisig.** Deploy a 2-of-3+ Safe on RH Chain mainnet (chain ID `4663`). Use `contracts/scripts/migrate-governance.ts` to transfer all ownership/roles off the deployer key.
 
-- [ ] **Foundry test suite.** `contracts/foundry.toml` is configured so `forge build`/`forge test` work against the same contracts, but only the Hardhat/Mocha suite has actual tests. Add a `test-foundry/` suite if the team prefers Foundry-style fuzz/invariant testing.
-- [ ] **wagmi hooks package.** `sdk/` is a plain viem-based SDK; a thin `@rwaforge/sdk/react` layer with `useDistribute`/`useClaim` hooks would make dashboard-style integrations faster to build.
-- [ ] **CI.** No GitHub Actions workflow yet for `npm run contracts:compile` / `contracts:test` / SDK typecheck on PRs.
-- [ ] **Real dependency audit.** `npm install` currently surfaces ~40-65 `npm audit` warnings, mostly from the wagmi/WalletConnect dependency tree in `dashboard/`. Not investigated — worth a pass before shipping the dashboard publicly.
-- [ ] **Block explorer verification config.** `hardhat.config.ts` has `etherscan.customChains` entries wired up but empty. The testnet explorer is confirmed live at `explorer.testnet.chain.robinhood.com` (Blockscout) — fill in `RH_TESTNET_EXPLORER_API_URL`/`RH_TESTNET_EXPLORER_BROWSER_URL` and run `hardhat verify` against the current testnet deployment; mainnet explorer URL still needs confirming.
+### Done
 
-## Explicitly out of scope for this repo (by design)
+- [x] All 5 core contracts deployed and tested on RH Chain Testnet
+- [x] Governance migrated to 2-of-2 Safe on testnet
+- [x] `@rwaforge/sdk` published on npm, verified against clean install
+- [x] Dashboard live at [rwaforge.vercel.app](https://rwaforge.vercel.app)
+- [x] Merkle CLI — `sdk/scripts/generate-merkle.ts` generates root + proofs from CSV
+- [x] Polymarket prediction markets embedded in dashboard (Predict tab)
+- [x] Finance-relevant market filtering (stocks, rates, crypto, earnings)
+- [x] Inline trade embed — click Trade inside the app, no redirect to Polymarket
 
-- No production staking/governance token vote-counting logic — left for a follow-up module so this stays a distribution-layer primitive, not a full DAO stack.
-- No custody of user funds anywhere — `RewardClaimer.claimFor` and the agent examples are relayer patterns, not custodial ones. Keep it that way.
+### Still needed before mainnet
+
+- [ ] **Gas benchmarking.** `MAX_BATCH_SIZE = 500` is a guess — profile on RH Chain mainnet before setting it in stone.
+- [ ] **Confirm stock token transfer semantics.** `DistributionRouter` assumes standard ERC-20 (amount in = amount received). Verify Robinhood Chain tokenized stocks aren't fee-on-transfer or rebasing.
+- [ ] **Real `IRWASwapRouter` adapter.** `Treasury.executeSwap` only has `MockSwapRouter` in tests. Wire up whatever DEX/aggregator exists on RH Chain mainnet.
+- [ ] **Partner outreach.** Contact Sairi, Atelier, Bankr — send them `@rwaforge/sdk` + `DistributionRouter` address. This is the B2B distribution angle: they push tokenized stock rewards to their users via one SDK call.
+
+---
+
+## v3 / v4 — Expand with fee revenue (do not build until v1/v2 generates income)
+
+**What it adds**: Full cross-chain collateral flow. Users lock tokenized stocks in `PredictVault` on RH Chain → operator agent bridges USDC to Polygon → places Polymarket CLOB order → on win, bridges USDC back → swaps to stock token → settles to user. Requires an operator USDC float (~$5–10k) and LayerZero bridge setup.
+
+- [ ] **Deploy `PredictVault.sol`** — contract written and compiled, audit submitted. Hold deployment until v3.
+- [ ] **Operator agent** — `agent/` directory is fully written (`src/index.ts`, `rhChain.ts`, `bridge.ts`, `polymarketClob.ts`, `polygonSwap.ts`). Requires: LZ endpoint address for RH Chain mainnet, USDC OFT addresses on both chains, Polymarket CLOB API key, operator USDC float on Polygon.
+- [ ] **LayerZero USDC OFT deployment** — deploy OFT adapter for USDC on RH Chain mainnet, wire to Polygon OFT.
+- [ ] **RH Chain DEX swap** — wire USDC → stock token swap on whatever DEX lives on RH Chain mainnet (Uniswap V3 fork assumed).
+- [ ] **Kalshi integration** — US-regulated prediction market, requires API key + account. Add as opt-in.
+
+---
+
+## Nice to have (either phase)
+
+- [ ] **Foundry fuzz/invariant tests** — `contracts/foundry.toml` is configured but no Foundry test suite exists yet.
+- [ ] **`@rwaforge/sdk/react` hooks** — `useDistribute`, `useClaim` wagmi hooks for faster dashboard integrations.
+- [ ] **CI** — GitHub Actions for compile/test/typecheck on PRs.
+- [ ] **Block explorer verification** — fill in `RH_TESTNET_EXPLORER_API_URL` in `hardhat.config.ts` and run `hardhat verify` against testnet deployment.
+
+---
+
+## Explicitly out of scope (by design)
+
+- No custody of user funds — `RewardClaimer.claimFor` and agent patterns are relayer flows, funds always go to the intended recipient.
+- No production staking/DAO governor — left for a follow-up module. Current ownership is transferable `Ownable`/`AccessControl`.

@@ -1,0 +1,22 @@
+{
+  "name": "@rwaforge/predict-agent",
+  "version": "0.1.0",
+  "description": "Off-chain operator agent: watches PredictVault on RH Chain, bridges via LayerZero, trades on Polymarket CLOB, swaps on Uniswap V3 Polygon, settles positions.",
+  "private": true,
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "start:prod": "node dist/index.js"
+  },
+  "dependencies": {
+    "viem": "^2.13.0",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.12.7"
+  }
+}

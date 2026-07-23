@@ -31,7 +31,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "example:distribute": "ts-node examples/distribute.ts",
-    "example:claim": "ts-node examples/claim.ts"
+    "example:claim": "ts-node examples/claim.ts",
+    "merkle:generate": "ts-node scripts/generate-merkle.ts"
   },
   "dependencies": {
     "viem": "^2.13.0"

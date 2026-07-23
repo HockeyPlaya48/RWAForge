@@ -29,9 +29,10 @@ export default function Home() {
       </div>
 
       <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-400">
-        Distribute and claim tokenized RWAs and stock rewards, agent-native from the ground up.{" "}
-        <span className="text-slate-200">Holders and agents</span> check their rewards below;{" "}
-        <span className="text-slate-200">protocols sending payouts</span> use Operator Tools.
+        Claim tokenized stocks and RWAs from protocols you use — then{" "}
+        <span className="text-slate-200">put them to work on prediction markets.</span>{" "}
+        Protocols and AI agents (Sairi, Atelier, Bankr) use RWAForge to distribute
+        tokenized stock rewards to their holders and users at scale.
       </p>
 
       <div className="mt-8">
@@ -41,8 +42,16 @@ export default function Home() {
       <DashboardTabs />
 
       <footer className="mt-16 border-t border-slate-800/60 pt-6 text-center text-xs text-slate-600">
-        Example dashboard for RWAForge — configure contract addresses in{" "}
-        <code className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-400">dashboard/.env.local</code>. MIT licensed.
+        RWAForge · MIT licensed ·{" "}
+        <a
+          href="https://github.com/HockeyPlaya48/RWAForge"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-slate-400"
+        >
+          GitHub
+        </a>{" "}
+        · Built on Robinhood Chain
       </footer>
     </main>
   );
