@@ -18,7 +18,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   rewards:
     "For holders and agents receiving distributions — check your balance, see what's claimable, and claim with one click.",
   markets:
-    "Live prediction markets powered by Polymarket — trade on outcomes related to your RWA holdings.",
+    "Native prediction markets on Robinhood Chain Testnet — bet with ETH, USGD, or tokenized stocks.",
   operator:
     "For protocols, DAOs, or agents sending distributions — batch-send an RWA/stock token to a list of recipients.",
 };

@@ -5,7 +5,6 @@ import { useAccount, useChainId, usePublicClient, useSwitchChain, useWriteContra
 
 const RH_TESTNET_ID = 46630;
 import { parseEther, parseUnits, formatEther } from "viem";
-import { fetchFinanceMarkets, type PolymarketMarket } from "@/lib/polymarket";
 
 // ── ABI ───────────────────────────────────────────────────────────────────────
 
@@ -413,95 +412,6 @@ function NativeCard({
   );
 }
 
-// ── Polymarket reference card (in-app display only, betting via RWAForge) ─────
-
-function PolyRefCard({
-  market,
-  expanded,
-  onToggle,
-}: {
-  market: PolymarketMarket;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const yesPrice = parseFloat(market.outcomePrices[0] ?? "0.5");
-  const noPrice = parseFloat(market.outcomePrices[1] ?? "0.5");
-  const yesPct = yesPrice * 100;
-  const noPct = noPrice * 100;
-  const volumeNum = parseFloat(market.volume ?? "0");
-
-  // Map to a native market id for betting — for now show "coming soon"
-  const endTime = market.endDate ? new Date(market.endDate).getTime() : Date.now() + 7 * 86_400_000;
-
-  return (
-    <div className={`rounded-xl border transition-colors ${expanded ? "border-slate-600 bg-slate-900/80" : "border-slate-800 bg-slate-900/40 hover:border-slate-700"}`}>
-      <button onClick={onToggle} className="w-full text-left p-4">
-        <div className="flex items-start gap-3">
-          {market.image && (
-            <img src={market.image} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover mt-0.5" />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="inline-flex items-center rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-                Trending
-              </span>
-              {market.endDate && (
-                <span className="text-xs text-slate-500">{daysLeft(endTime)}</span>
-              )}
-              <span className="text-xs text-slate-600">· {fmtVolume(volumeNum)} vol</span>
-            </div>
-            <p className="text-sm font-medium leading-snug text-slate-100">
-              {market.question}
-            </p>
-            <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-green-500 to-green-400"
-                style={{ width: `${yesPct.toFixed(1)}%` }}
-              />
-            </div>
-          </div>
-          <div className="shrink-0 flex gap-2 text-center">
-            <div className="w-14">
-              <p className="text-[10px] text-slate-500">{market.outcomes[0] ?? "Yes"}</p>
-              <p className="text-sm font-bold text-green-400">{Math.round(yesPct)}¢</p>
-            </div>
-            <div className="w-14">
-              <p className="text-[10px] text-slate-500">{market.outcomes[1] ?? "No"}</p>
-              <p className="text-sm font-bold text-red-400">{Math.round(noPct)}¢</p>
-            </div>
-            <div className="flex items-center pl-1">
-              <svg
-                className={`h-4 w-4 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-slate-800 pt-4">
-          <div className="rounded-lg border border-mint/20 bg-mint/5 px-3 py-2.5 mb-3">
-            <p className="text-xs text-mint font-medium mb-0.5">Bet on this via RWAForge</p>
-            <p className="text-xs text-slate-400">
-              This market is tracked from Polymarket as a reference. Native RWAForge on-chain support for trending markets coming in v2 — deploy <code className="text-slate-300">PredictionMarket.sol</code> and create a matching market to enable betting.
-            </p>
-          </div>
-          <div className="flex gap-2 text-xs text-slate-600">
-            <span>{market.outcomes[0] ?? "Yes"}: {Math.round(yesPct)}¢</span>
-            <span>·</span>
-            <span>{market.outcomes[1] ?? "No"}: {Math.round(noPct)}¢</span>
-            <span>·</span>
-            <span>{fmtVolume(volumeNum)} total volume</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── My Positions ──────────────────────────────────────────────────────────────
 
 type Position = {
@@ -703,26 +613,12 @@ function MyPositions() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PredictionMarkets() {
-  const [polyMarkets, setPolyMarkets] = useState<PolymarketMarket[]>([]);
-  const [loadingPoly, setLoadingPoly] = useState(true);
   const [filter, setFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"rwaforge" | "trending">("rwaforge");
-
-  useEffect(() => {
-    fetchFinanceMarkets()
-      .then(setPolyMarkets)
-      .catch(() => setPolyMarkets([]))
-      .finally(() => setLoadingPoly(false));
-  }, []);
 
   const filteredNative = filter
     ? NATIVE_MARKETS.filter((m) => m.question.toLowerCase().includes(filter.toLowerCase()))
     : NATIVE_MARKETS;
-
-  const filteredPoly = filter
-    ? polyMarkets.filter((m) => m.question.toLowerCase().includes(filter.toLowerCase()))
-    : polyMarkets;
 
   const toggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -757,73 +653,20 @@ export function PredictionMarkets() {
           />
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 rounded-lg border border-slate-800 bg-slate-950/60 p-1 mb-4">
-          <button
-            onClick={() => setTab("rwaforge")}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              tab === "rwaforge" ? "bg-mint text-navy" : "text-slate-400 hover:text-slate-100"
-            }`}
-          >
-            RWAForge Markets
-          </button>
-          <button
-            onClick={() => setTab("trending")}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              tab === "trending" ? "bg-mint text-navy" : "text-slate-400 hover:text-slate-100"
-            }`}
-          >
-            Trending
-            {polyMarkets.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px]">
-                {filteredPoly.length}
-              </span>
-            )}
-          </button>
+        {/* Native markets */}
+        <div className="space-y-2">
+          {filteredNative.length === 0 && (
+            <p className="text-center text-sm text-slate-500 py-8">No markets match your search.</p>
+          )}
+          {filteredNative.map((m) => (
+            <NativeCard
+              key={m.id}
+              market={m}
+              expanded={expandedId === `native-${m.id}`}
+              onToggle={() => toggle(`native-${m.id}`)}
+            />
+          ))}
         </div>
-
-        {/* RWAForge native markets */}
-        {tab === "rwaforge" && (
-          <div className="space-y-2">
-            {filteredNative.length === 0 && (
-              <p className="text-center text-sm text-slate-500 py-8">No markets match your search.</p>
-            )}
-            {filteredNative.map((m) => (
-              <NativeCard
-                key={m.id}
-                market={m}
-                expanded={expandedId === `native-${m.id}`}
-                onToggle={() => toggle(`native-${m.id}`)}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Trending markets (Polymarket reference, in-app) */}
-        {tab === "trending" && (
-          <div className="space-y-2">
-            {loadingPoly && (
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-800/60" />
-                ))}
-              </div>
-            )}
-            {!loadingPoly && filteredPoly.length === 0 && (
-              <div className="rounded-lg border border-dashed border-slate-800 px-4 py-8 text-center">
-                <p className="text-sm text-slate-500">No trending markets found.</p>
-              </div>
-            )}
-            {filteredPoly.map((m) => (
-              <PolyRefCard
-                key={m.id}
-                market={m}
-                expanded={expandedId === `poly-${m.id}`}
-                onToggle={() => toggle(`poly-${m.id}`)}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       <MyPositions />
