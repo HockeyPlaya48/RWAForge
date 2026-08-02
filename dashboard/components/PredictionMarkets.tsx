@@ -7,6 +7,7 @@ const RH_TESTNET_ID = 46630;
 const ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 import { formatUnits, parseUnits } from "viem";
+import { fetchActiveMarketPool, findReferenceMarket, type PolymarketMarket } from "@/lib/polymarket";
 
 // ── ABI ───────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,8 @@ type NativeMarket = {
   question: string;
   description: string;
   category: string;
+  /** Keyword to best-effort match against live Polymarket markets for reference odds. Omit if no real-world equivalent exists. */
+  pmKeyword?: string;
 };
 
 const NATIVE_MARKETS: NativeMarket[] = [
@@ -90,36 +93,49 @@ const NATIVE_MARKETS: NativeMarket[] = [
     question: "Will tokenized AAPL on RH Chain exceed $220 by end of Q3 2026?",
     description: "Resolves YES if AAPL closes above $220 on September 30, 2026 per Robinhood's tokenized equity price feed.",
     category: "Stocks",
+    pmKeyword: "apple",
   },
   {
     id: 1,
     question: "Will the Federal Reserve cut rates in September 2026?",
     description: "Resolves YES if the FOMC announces a rate cut at the September 2026 meeting.",
     category: "Macro",
+    pmKeyword: "fed",
   },
   {
     id: 2,
     question: "Will tokenized TSLA exceed $350 before October 2026?",
-    description: "Resolves YES if TSLA's tokenized price on RH Chain closes above $350 on any trading day before October 1, 2026.",
+    description: "Resolves YES if TSLA's tokenized price on RH Chain closes above $350 on any trading day before October 1, 2026. Collateral: native ETH.",
     category: "Stocks",
+    pmKeyword: "tesla",
   },
   {
     id: 3,
     question: "Will RWAForge reach $1M total distribution volume by Oct 2026?",
     description: "Resolves YES if the cumulative USD value distributed via RWAForge DistributionRouter exceeds $1,000,000 before November 1, 2026.",
     category: "RWAForge",
+    // No pmKeyword - this is RWAForge-specific, no real-world market exists for it.
   },
   {
     id: 4,
     question: "Will Bitcoin exceed $120,000 before October 2026?",
     description: "Resolves YES if BTC/USD on any major exchange closes above $120,000 before October 1, 2026.",
     category: "Crypto",
+    pmKeyword: "bitcoin",
   },
   {
     id: 5,
     question: "Will NVIDIA beat Q3 2026 earnings estimates?",
     description: "Resolves YES if NVIDIA reports Q3 2026 EPS above analyst consensus estimates at time of market creation.",
     category: "Stocks",
+    pmKeyword: "nvidia",
+  },
+  {
+    id: 6,
+    question: "Will tokenized TSLA exceed $350 before October 2026? (bet with TSLA)",
+    description: "Same real-world question as the ETH-collateralized TSLA market, but this one takes tokenized TSLA itself as collateral — bet with the stock you're predicting on.",
+    category: "Stocks",
+    pmKeyword: "tesla",
   },
 ];
 
@@ -224,16 +240,21 @@ function NativeCard({
   market,
   expanded,
   onToggle,
+  referencePool,
 }: {
   market: NativeMarket;
   expanded: boolean;
   onToggle: () => void;
+  referencePool: PolymarketMarket[];
 }) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { onchain, collateral, loading, error, refresh, contractAddress, publicClient } = useOnchainMarket(market.id);
+
+  const reference = market.pmKeyword ? findReferenceMarket(referencePool, market.pmKeyword) : null;
+  const referenceYesPct = reference ? parseFloat(reference.outcomePrices[0] ?? "0.5") * 100 : null;
 
   const [side, setSide] = useState<"yes" | "no" | null>(null);
   const [amount, setAmount] = useState("");
@@ -343,6 +364,12 @@ function NativeCard({
                 style={{ width: `${yesPct.toFixed(1)}%` }}
               />
             </div>
+            {reference && referenceYesPct !== null && (
+              <p className="mt-2 text-[11px] text-slate-500">
+                Reference (Polymarket, separate market — not what you're betting into): "{reference.question}" ·{" "}
+                <span className="text-slate-400">{Math.round(referenceYesPct)}¢ YES</span>
+              </p>
+            )}
           </div>
           <div className="shrink-0 flex gap-2 text-center">
             <div className="w-14">
@@ -382,6 +409,25 @@ function NativeCard({
             </div>
           )}
           <p className="text-xs text-slate-500 mb-3 leading-relaxed">{market.description}</p>
+
+          {reference && referenceYesPct !== null && (
+            <div className="mb-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-slate-600">
+                Reference — a related, separate market on Polymarket (not what your bet settles against)
+              </p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-400 truncate">{reference.question}</p>
+                <a
+                  href={`https://polymarket.com/event/${reference.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-xs font-medium text-mint hover:underline"
+                >
+                  {Math.round(referenceYesPct)}¢ YES ↗
+                </a>
+              </div>
+            </div>
+          )}
 
           {/* YES / NO buttons */}
           <div className="flex gap-2 mb-3">
@@ -660,6 +706,13 @@ function MyPositions() {
 export function PredictionMarkets() {
   const [filter, setFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [referencePool, setReferencePool] = useState<PolymarketMarket[]>([]);
+
+  useEffect(() => {
+    fetchActiveMarketPool()
+      .then(setReferencePool)
+      .catch(() => setReferencePool([]));
+  }, []);
 
   const filteredNative = filter
     ? NATIVE_MARKETS.filter((m) => m.question.toLowerCase().includes(filter.toLowerCase()))
@@ -709,6 +762,7 @@ export function PredictionMarkets() {
               market={m}
               expanded={expandedId === `native-${m.id}`}
               onToggle={() => toggle(`native-${m.id}`)}
+              referencePool={referencePool}
             />
           ))}
         </div>
@@ -721,9 +775,11 @@ export function PredictionMarkets() {
         <p className="text-xs leading-relaxed text-slate-500">
           <span className="font-medium text-slate-400">Collateral:</span>{" "}
           Each market's accepted collateral is fixed at creation — the amount field above shows exactly which
-          token a given market requires, read live from the contract. All current markets accept native ETH.
-          Winners receive a proportional share of the total pool minus a 2% protocol fee. Markets resolved by
-          RWAForge operators.
+          token a given market requires, read live from the contract. Most current markets accept native ETH;
+          one TSLA-collateralized market is live for testing tokenized-stock collateral. Winners receive a
+          proportional share of the total pool minus a 2% protocol fee. Markets resolved by RWAForge operators.
+          Where shown, "Reference" odds are a separate, related market on Polymarket for context only — your
+          bet settles against RWAForge's own pool, not Polymarket's.
         </p>
       </div>
     </div>
