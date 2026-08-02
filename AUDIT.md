@@ -29,6 +29,8 @@ Prepared for an independent security review. This document exists so a reviewer'
 
 Unaudited. Live on Robinhood Chain **Testnet** only (chain ID `46630`) — see [Deployed Contracts](README.md#deployed-contracts-testnet). Not deployed to mainnet. No real value has moved through these contracts; all testnet activity is free-faucet ETH and a token with no market value.
 
+**Audit target**: tag [`audit-candidate-v1`](https://github.com/HockeyPlaya48/RWAForge/releases/tag/audit-candidate-v1) — review against this exact commit, not a moving `main`. If contracts change after this tag, cut a new one and update this line rather than assuming `main` is still what was reviewed.
+
 ## In scope
 
 | Contract | Path | Purpose |
