@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWriteContract } from "wagmi";
 
 const RH_TESTNET_ID = 46630;
-import { parseEther, parseUnits, formatEther } from "viem";
+const ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+import { formatUnits, parseUnits } from "viem";
 
 // ── ABI ───────────────────────────────────────────────────────────────────────
 
@@ -66,28 +68,20 @@ const PREDICTION_MARKET_ABI = [
   },
 ] as const;
 
-// ── Collateral options ────────────────────────────────────────────────────────
+const ERC20_MIN_ABI = [
+  { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+  { type: "function", name: "allowance", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "approve", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] },
+] as const;
 
-const COLLATERAL_OPTIONS = [
-  { label: "ETH", value: "ETH", decimals: 18 },
-  { label: "USGD", value: "USGD", decimals: 6 },
-  { label: "AAPL", value: "AAPL", decimals: 6 },
-  { label: "TSLA", value: "TSLA", decimals: 6 },
-  { label: "NVDA", value: "NVDA", decimals: 6 },
-];
-
-// ── Native RWAForge markets ───────────────────────────────────────────────────
+// ── Native RWAForge markets (static metadata not stored on-chain) ─────────────
 
 type NativeMarket = {
   id: number;
   question: string;
   description: string;
   category: string;
-  endTime: number;
-  yesPool: number;
-  noPool: number;
-  defaultCollateral: string;
-  status: "open" | "closed";
 };
 
 const NATIVE_MARKETS: NativeMarket[] = [
@@ -96,81 +90,51 @@ const NATIVE_MARKETS: NativeMarket[] = [
     question: "Will tokenized AAPL on RH Chain exceed $220 by end of Q3 2026?",
     description: "Resolves YES if AAPL closes above $220 on September 30, 2026 per Robinhood's tokenized equity price feed.",
     category: "Stocks",
-    endTime: new Date("2026-09-30").getTime(),
-    yesPool: 1250,
-    noPool: 800,
-    defaultCollateral: "ETH",
-    status: "open",
   },
   {
     id: 1,
     question: "Will the Federal Reserve cut rates in September 2026?",
     description: "Resolves YES if the FOMC announces a rate cut at the September 2026 meeting.",
     category: "Macro",
-    endTime: new Date("2026-09-21").getTime(),
-    yesPool: 3200,
-    noPool: 900,
-    defaultCollateral: "USGD",
-    status: "open",
   },
   {
     id: 2,
     question: "Will tokenized TSLA exceed $350 before October 2026?",
     description: "Resolves YES if TSLA's tokenized price on RH Chain closes above $350 on any trading day before October 1, 2026.",
     category: "Stocks",
-    endTime: new Date("2026-09-30").getTime(),
-    yesPool: 870,
-    noPool: 1540,
-    defaultCollateral: "ETH",
-    status: "open",
   },
   {
     id: 3,
     question: "Will RWAForge reach $1M total distribution volume by Oct 2026?",
     description: "Resolves YES if the cumulative USD value distributed via RWAForge DistributionRouter exceeds $1,000,000 before November 1, 2026.",
     category: "RWAForge",
-    endTime: new Date("2026-10-01").getTime(),
-    yesPool: 500,
-    noPool: 1100,
-    defaultCollateral: "USGD",
-    status: "open",
   },
   {
     id: 4,
     question: "Will Bitcoin exceed $120,000 before October 2026?",
     description: "Resolves YES if BTC/USD on any major exchange closes above $120,000 before October 1, 2026.",
     category: "Crypto",
-    endTime: new Date("2026-09-30").getTime(),
-    yesPool: 4800,
-    noPool: 2100,
-    defaultCollateral: "ETH",
-    status: "open",
   },
   {
     id: 5,
     question: "Will NVIDIA beat Q3 2026 earnings estimates?",
     description: "Resolves YES if NVIDIA reports Q3 2026 EPS above analyst consensus estimates at time of market creation.",
     category: "Stocks",
-    endTime: new Date("2026-11-20").getTime(),
-    yesPool: 2200,
-    noPool: 650,
-    defaultCollateral: "ETH",
-    status: "open",
   },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtVolume(v: number | string): string {
-  const n = typeof v === "string" ? parseFloat(v) : v;
-  if (isNaN(n)) return "$0";
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
+/** Formats a token-unit amount (not a USD estimate — we have no price feed). */
+function fmtAmount(n: number): string {
+  if (n === 0) return "0";
+  if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toFixed(2);
+  return n.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function daysLeft(endTime: number): string {
-  const d = Math.ceil((endTime - Date.now()) / 86_400_000);
+function daysLeft(endTimeMs: number): string {
+  const d = Math.ceil((endTimeMs - Date.now()) / 86_400_000);
   if (d < 0) return "Resolving";
   if (d === 0) return "Ends today";
   return `${d}d left`;
@@ -184,19 +148,74 @@ const CATEGORY_COLORS: Record<string, string> = {
   Market: "text-slate-400 bg-slate-500/10 border-slate-500/20",
 };
 
-// ── Probability bar ───────────────────────────────────────────────────────────
+// ── On-chain market data ────────────────────────────────────────────────────
 
-function ProbBar({ yes, no }: { yes: number; no: number }) {
-  const total = yes + no;
-  const yesPct = total > 0 ? (yes / total) * 100 : 50;
-  return (
-    <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-      <div
-        className="h-full rounded-full bg-gradient-to-r from-green-500 to-green-400"
-        style={{ width: `${yesPct.toFixed(1)}%` }}
-      />
-    </div>
-  );
+type OnchainMarket = {
+  collateralToken: `0x${string}`;
+  endTime: bigint;
+  yesPool: bigint;
+  noPool: bigint;
+  outcome: number;
+};
+
+type CollateralInfo = {
+  isEth: boolean;
+  symbol: string;
+  decimals: number;
+};
+
+/** Fetches live market state + resolves the real collateral token's symbol/decimals. */
+function useOnchainMarket(marketId: number) {
+  const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
+  const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}` | undefined;
+
+  const [onchain, setOnchain] = useState<OnchainMarket | null>(null);
+  const [collateral, setCollateral] = useState<CollateralInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!contractAddress || !publicClient) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const m = await publicClient.readContract({
+        address: contractAddress,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: "getMarket",
+        args: [BigInt(marketId)],
+      });
+      const data: OnchainMarket = {
+        collateralToken: m.collateralToken,
+        endTime: m.endTime,
+        yesPool: m.yesPool,
+        noPool: m.noPool,
+        outcome: m.outcome,
+      };
+      setOnchain(data);
+
+      const isEth = data.collateralToken.toLowerCase() === ETH_SENTINEL.toLowerCase();
+      if (isEth) {
+        setCollateral({ isEth: true, symbol: "ETH", decimals: 18 });
+      } else {
+        const [symbol, decimals] = await Promise.all([
+          publicClient.readContract({ address: data.collateralToken, abi: ERC20_MIN_ABI, functionName: "symbol" }),
+          publicClient.readContract({ address: data.collateralToken, abi: ERC20_MIN_ABI, functionName: "decimals" }),
+        ]);
+        setCollateral({ isEth: false, symbol, decimals: Number(decimals) });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load market");
+    } finally {
+      setLoading(false);
+    }
+  }, [contractAddress, publicClient, marketId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { onchain, collateral, loading, error, refresh, contractAddress, publicClient };
 }
 
 // ── Native market card with inline bet form ───────────────────────────────────
@@ -210,69 +229,90 @@ function NativeCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
-  const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
+  const { onchain, collateral, loading, error, refresh, contractAddress, publicClient } = useOnchainMarket(market.id);
 
   const [side, setSide] = useState<"yes" | "no" | null>(null);
   const [amount, setAmount] = useState("");
-  const [collateral, setCollateral] = useState(market.defaultCollateral);
   const [txStatus, setTxStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}` | undefined;
-  const total = market.yesPool + market.noPool;
-  const yesPct = total > 0 ? (market.yesPool / total) * 100 : 50;
-  const noPct = 100 - yesPct;
   const catColor = CATEGORY_COLORS[market.category] ?? CATEGORY_COLORS.Market;
 
+  const decimals = collateral?.decimals ?? 18;
+  const yesPool = onchain ? Number(formatUnits(onchain.yesPool, decimals)) : 0;
+  const noPool = onchain ? Number(formatUnits(onchain.noPool, decimals)) : 0;
+  const total = yesPool + noPool;
+  const yesPct = total > 0 ? (yesPool / total) * 100 : 50;
+  const noPct = 100 - yesPct;
+  const symbol = collateral?.symbol ?? "…";
+  const endTimeMs = onchain ? Number(onchain.endTime) * 1000 : Date.now();
+
   const handleBet = async () => {
-    if (!isConnected) { setTxStatus("Connect your wallet first."); return; }
+    if (!isConnected || !address) { setTxStatus("Connect your wallet first."); return; }
     if (!side) { setTxStatus("Select YES or NO."); return; }
     if (!amount || parseFloat(amount) <= 0) { setTxStatus("Enter an amount."); return; }
-    if (!contractAddress) {
-      setTxStatus("PredictionMarket not deployed yet — set NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS.");
-      return;
-    }
+    if (!contractAddress) { setTxStatus("PredictionMarket not deployed — set NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS."); return; }
+    if (!onchain || !collateral || !publicClient) { setTxStatus("Still loading market data — try again in a moment."); return; }
 
     setSubmitting(true);
     setTxStatus("Submitting...");
     try {
-      // Switch to RH Chain testnet if needed
       if (chainId !== RH_TESTNET_ID) {
         setTxStatus("Switching to RH Chain Testnet...");
         await switchChainAsync({ chainId: RH_TESTNET_ID });
       }
 
       const isYes = side === "yes";
-      const selectedColl = COLLATERAL_OPTIONS.find((c) => c.value === collateral);
+      const parsedAmount = parseUnits(amount, collateral.decimals);
       let hash: `0x${string}`;
 
-      if (collateral === "ETH") {
+      if (collateral.isEth) {
         hash = await writeContractAsync({
           address: contractAddress,
           abi: PREDICTION_MARKET_ABI,
           functionName: "betETH",
           args: [BigInt(market.id), isYes],
-          value: parseEther(amount),
+          value: parsedAmount,
         });
       } else {
+        // ERC-20 collateral: this market's `bet()` calls transferFrom internally,
+        // so an insufficient allowance must be topped up first or the tx reverts.
+        const currentAllowance = await publicClient.readContract({
+          address: onchain.collateralToken,
+          abi: ERC20_MIN_ABI,
+          functionName: "allowance",
+          args: [address, contractAddress],
+        });
+        if (currentAllowance < parsedAmount) {
+          setTxStatus(`Approving ${symbol}...`);
+          const approveHash = await writeContractAsync({
+            address: onchain.collateralToken,
+            abi: ERC20_MIN_ABI,
+            functionName: "approve",
+            args: [contractAddress, parsedAmount],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        }
+        setTxStatus("Submitting bet...");
         hash = await writeContractAsync({
           address: contractAddress,
           abi: PREDICTION_MARKET_ABI,
           functionName: "bet",
-          args: [BigInt(market.id), isYes, parseUnits(amount, selectedColl?.decimals ?? 6)],
+          args: [BigInt(market.id), isYes, parsedAmount],
         });
       }
 
-      await publicClient?.waitForTransactionReceipt({ hash });
+      await publicClient.waitForTransactionReceipt({ hash });
       setTxStatus(`Bet placed! ${hash.slice(0, 10)}…`);
       setSide(null);
       setAmount("");
+      await refresh();
     } catch (err) {
-      setTxStatus(err instanceof Error ? err.message.slice(0, 120) : "Transaction failed.");
+      setTxStatus(err instanceof Error ? err.message.slice(0, 160) : "Transaction failed.");
     } finally {
       setSubmitting(false);
     }
@@ -291,22 +331,27 @@ function NativeCard({
               <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${catColor}`}>
                 {market.category}
               </span>
-              <span className="text-xs text-slate-500">{daysLeft(market.endTime)}</span>
-              <span className="text-xs text-slate-600">· {fmtVolume(total)} vol</span>
+              <span className="text-xs text-slate-500">{loading && !onchain ? "…" : daysLeft(endTimeMs)}</span>
+              <span className="text-xs text-slate-600">· {loading && !onchain ? "…" : `${fmtAmount(total)} ${symbol} vol`}</span>
             </div>
             <p className="text-sm font-medium leading-snug text-slate-100">
               {market.question}
             </p>
-            <ProbBar yes={market.yesPool} no={market.noPool} />
+            <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-green-500 to-green-400"
+                style={{ width: `${yesPct.toFixed(1)}%` }}
+              />
+            </div>
           </div>
           <div className="shrink-0 flex gap-2 text-center">
             <div className="w-14">
               <p className="text-[10px] text-slate-500">YES</p>
-              <p className="text-sm font-bold text-green-400">{yesPct.toFixed(0)}¢</p>
+              <p className="text-sm font-bold text-green-400">{loading && !onchain ? "…" : `${yesPct.toFixed(0)}¢`}</p>
             </div>
             <div className="w-14">
               <p className="text-[10px] text-slate-500">NO</p>
-              <p className="text-sm font-bold text-red-400">{noPct.toFixed(0)}¢</p>
+              <p className="text-sm font-bold text-red-400">{loading && !onchain ? "…" : `${noPct.toFixed(0)}¢`}</p>
             </div>
             <div className="flex items-center pl-1">
               <svg
@@ -329,6 +374,11 @@ function NativeCard({
               <p className="text-xs text-yellow-300">
                 Wrong network. Click Bet and you'll be prompted to switch to RH Chain Testnet.
               </p>
+            </div>
+          )}
+          {error && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+              <p className="text-xs text-red-300">Couldn't load live market data: {error}</p>
             </div>
           )}
           <p className="text-xs text-slate-500 mb-3 leading-relaxed">{market.description}</p>
@@ -357,27 +407,21 @@ function NativeCard({
             </button>
           </div>
 
-          {/* Amount + collateral */}
+          {/* Amount — collateral is fixed per-market on-chain, not a free choice */}
           <div className="flex gap-2 mb-3">
             <input
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="Amount"
+              placeholder={`Amount in ${symbol}`}
               className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
             />
-            <select
-              value={collateral}
-              onChange={(e) => setCollateral(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
-            >
-              {COLLATERAL_OPTIONS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+            <span className="flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+              {symbol}
+            </span>
             <button
               onClick={handleBet}
-              disabled={submitting || !side || !amount}
+              disabled={submitting || !side || !amount || loading}
               className="rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-navy disabled:opacity-40 whitespace-nowrap"
             >
               {submitting ? "..." : side ? `Bet ${side.toUpperCase()}` : "Select side"}
@@ -389,7 +433,7 @@ function NativeCard({
             <div className="mb-3 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-400 flex justify-between">
               <span>Est. payout if {side.toUpperCase()} wins</span>
               <span className="font-medium text-slate-200">
-                {(parseFloat(amount) * (100 / (side === "yes" ? yesPct : noPct))).toFixed(4)} {collateral}
+                {(parseFloat(amount) * (100 / (side === "yes" ? yesPct : noPct))).toFixed(4)} {symbol}
               </span>
             </div>
           )}
@@ -398,11 +442,11 @@ function NativeCard({
             <p className="mt-1 break-all text-xs text-slate-400">{txStatus}</p>
           )}
 
-          {/* Pool breakdown */}
+          {/* Pool breakdown — live on-chain values */}
           <div className="mt-3 flex gap-2 text-xs text-slate-600">
-            <span>YES pool: {fmtVolume(market.yesPool)} {market.defaultCollateral}</span>
+            <span>YES pool: {fmtAmount(yesPool)} {symbol}</span>
             <span>·</span>
-            <span>NO pool: {fmtVolume(market.noPool)} {market.defaultCollateral}</span>
+            <span>NO pool: {fmtAmount(noPool)} {symbol}</span>
             <span>·</span>
             <span>2% protocol fee</span>
           </div>
@@ -421,13 +465,14 @@ type Position = {
   amount: bigint;
   outcome: number;
   isClaimed: boolean;
-  collateral: string;
+  symbol: string;
+  decimals: number;
 };
 
 function MyPositions() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
   const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}` | undefined;
 
   const [positions, setPositions] = useState<Position[]>([]);
@@ -436,38 +481,38 @@ function MyPositions() {
   const [claimStatus, setClaimStatus] = useState<Record<number, string>>({});
 
   const fetchPositions = useCallback(async () => {
-    if (!address || !contractAddress) return;
+    if (!address || !contractAddress || !publicClient) return;
     setLoaded(false);
     const found: Position[] = [];
-
-    // Use ethers directly — avoids wagmi publicClient chain-pinning issues
-    const { ethers } = await import("ethers");
-    const provider = new ethers.JsonRpcProvider("https://rpc.testnet.chain.robinhood.com");
-    const ABI = [
-      "function yesBets(uint256, address) view returns (uint256)",
-      "function noBets(uint256, address) view returns (uint256)",
-      "function claimed(uint256, address) view returns (bool)",
-      "function getMarket(uint256) view returns (tuple(string question, address collateralToken, uint256 endTime, uint256 yesPool, uint256 noPool, uint8 outcome, address creator))",
-    ];
-    const pm = new ethers.Contract(contractAddress, ABI, provider);
 
     await Promise.all(
       NATIVE_MARKETS.map(async (m) => {
         try {
           const [yesBet, noBet, market, isClaimed] = await Promise.all([
-            pm.yesBets(m.id, address) as Promise<bigint>,
-            pm.noBets(m.id, address) as Promise<bigint>,
-            pm.getMarket(m.id),
-            pm.claimed(m.id, address) as Promise<boolean>,
+            publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "yesBets", args: [BigInt(m.id), address] }),
+            publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "noBets", args: [BigInt(m.id), address] }),
+            publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "getMarket", args: [BigInt(m.id)] }),
+            publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "claimed", args: [BigInt(m.id), address] }),
           ]);
 
           const outcome = Number(market.outcome);
+          const isEth = market.collateralToken.toLowerCase() === ETH_SENTINEL.toLowerCase();
+          let symbol = "ETH";
+          let decimals = 18;
+          if (!isEth) {
+            const [s, d] = await Promise.all([
+              publicClient.readContract({ address: market.collateralToken, abi: ERC20_MIN_ABI, functionName: "symbol" }),
+              publicClient.readContract({ address: market.collateralToken, abi: ERC20_MIN_ABI, functionName: "decimals" }),
+            ]);
+            symbol = s;
+            decimals = Number(d);
+          }
 
           if (yesBet > 0n) {
-            found.push({ id: m.id, question: m.question, side: "YES", amount: yesBet, outcome, isClaimed, collateral: m.defaultCollateral });
+            found.push({ id: m.id, question: m.question, side: "YES", amount: yesBet, outcome, isClaimed, symbol, decimals });
           }
           if (noBet > 0n) {
-            found.push({ id: m.id, question: m.question, side: "NO", amount: noBet, outcome, isClaimed, collateral: m.defaultCollateral });
+            found.push({ id: m.id, question: m.question, side: "NO", amount: noBet, outcome, isClaimed, symbol, decimals });
           }
         } catch (e) {
           console.error("fetchPositions market", m.id, e);
@@ -478,7 +523,7 @@ function MyPositions() {
     found.sort((a, b) => a.id - b.id);
     setPositions(found);
     setLoaded(true);
-  }, [address, contractAddress]);
+  }, [address, contractAddress, publicClient]);
 
   useEffect(() => {
     fetchPositions();
@@ -490,7 +535,7 @@ function MyPositions() {
   const lost = (p: Position) => (p.outcome === 1 && p.side === "NO") || (p.outcome === 2 && p.side === "YES");
 
   const handleClaim = async (marketId: number) => {
-    if (!contractAddress) return;
+    if (!contractAddress || !publicClient) return;
     setClaiming(marketId);
     setClaimStatus((s) => ({ ...s, [marketId]: "Claiming..." }));
     try {
@@ -500,7 +545,7 @@ function MyPositions() {
         functionName: "claimWinnings",
         args: [BigInt(marketId)],
       });
-      await publicClient?.waitForTransactionReceipt({ hash });
+      await publicClient.waitForTransactionReceipt({ hash });
       setClaimStatus((s) => ({ ...s, [marketId]: `Claimed! ${hash.slice(0, 10)}…` }));
       fetchPositions();
     } catch (err) {
@@ -562,7 +607,7 @@ function MyPositions() {
                       {p.side}
                     </span>
                     <span className="text-xs text-slate-400">
-                      {parseFloat(formatEther(p.amount)).toFixed(5)} {p.collateral}
+                      {fmtAmount(Number(formatUnits(p.amount, p.decimals)))} {p.symbol}
                     </span>
                     <span className="text-slate-700">·</span>
                     <span className={`text-xs font-medium ${
@@ -581,7 +626,7 @@ function MyPositions() {
                     <div>
                       <p className="text-[10px] text-slate-500">Staked</p>
                       <p className="text-sm font-semibold text-slate-200">
-                        {parseFloat(formatEther(p.amount)).toFixed(5)} {p.collateral}
+                        {fmtAmount(Number(formatUnits(p.amount, p.decimals)))} {p.symbol}
                       </p>
                     </div>
                   )}
@@ -630,7 +675,7 @@ export function PredictionMarkets() {
           <div>
             <h2 className="text-base font-semibold text-slate-100">Prediction Markets</h2>
             <p className="mt-0.5 text-sm text-slate-500">
-              Bet with ETH, USGD, or tokenized stocks — everything on RH Chain.
+              Odds, pools, and positions read live from the deployed contract on RH Chain Testnet.
             </p>
           </div>
           <span className="shrink-0 rounded-full border border-mint/30 bg-mint/10 px-2.5 py-1 text-xs font-medium text-mint">
@@ -674,10 +719,11 @@ export function PredictionMarkets() {
       {/* Footer info */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-5 py-4">
         <p className="text-xs leading-relaxed text-slate-500">
-          <span className="font-medium text-slate-400">Supported collateral:</span>{" "}
-          Native ETH, USGD, and any tokenized stock on RH Chain (AAPL, TSLA, NVDA…).
-          Winners receive proportional share of the total pool minus a 2% protocol fee.
-          Markets resolved by RWAForge operators.
+          <span className="font-medium text-slate-400">Collateral:</span>{" "}
+          Each market's accepted collateral is fixed at creation — the amount field above shows exactly which
+          token a given market requires, read live from the contract. All current markets accept native ETH.
+          Winners receive a proportional share of the total pool minus a 2% protocol fee. Markets resolved by
+          RWAForge operators.
         </p>
       </div>
     </div>
