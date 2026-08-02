@@ -78,66 +78,89 @@ const ERC20_MIN_ABI = [
 
 // ── Native RWAForge markets (static metadata not stored on-chain) ─────────────
 
-type NativeMarket = {
+/**
+ * A market "variant" is one real on-chain market (one collateral token, fixed
+ * at creation). Multiple variants can share the same real-world question when
+ * more than one collateral-specific market exists for it - e.g. the TSLA
+ * question below has both an ETH-collateralized and a TSLA-collateralized
+ * on-chain market. The collateral dropdown only ever lists variants that
+ * genuinely exist on-chain; it never offers a collateral with no real market
+ * behind it (that was the original bug - see git history).
+ */
+type MarketVariant = {
   id: number;
+  /** Static label for the dropdown, based on a verified real token - not a guess. */
+  collateralLabel: string;
+};
+
+type NativeMarketGroup = {
+  groupId: string;
   question: string;
   description: string;
   category: string;
   /** Keyword to best-effort match against live Polymarket markets for reference odds. Omit if no real-world equivalent exists. */
   pmKeyword?: string;
+  variants: MarketVariant[];
 };
 
-const NATIVE_MARKETS: NativeMarket[] = [
+const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
   {
-    id: 0,
+    groupId: "aapl-220",
     question: "Will tokenized AAPL on RH Chain exceed $220 by end of Q3 2026?",
     description: "Resolves YES if AAPL closes above $220 on September 30, 2026 per Robinhood's tokenized equity price feed.",
     category: "Stocks",
     pmKeyword: "apple",
+    variants: [{ id: 0, collateralLabel: "ETH" }],
   },
   {
-    id: 1,
+    groupId: "fed-sep26",
     question: "Will the Federal Reserve cut rates in September 2026?",
     description: "Resolves YES if the FOMC announces a rate cut at the September 2026 meeting.",
     category: "Macro",
     pmKeyword: "fed",
+    variants: [{ id: 1, collateralLabel: "ETH" }],
   },
   {
-    id: 2,
+    groupId: "tsla-350",
     question: "Will tokenized TSLA exceed $350 before October 2026?",
-    description: "Resolves YES if TSLA's tokenized price on RH Chain closes above $350 on any trading day before October 1, 2026. Collateral: native ETH.",
+    description: "Resolves YES if TSLA's tokenized price on RH Chain closes above $350 on any trading day before October 1, 2026. Pick a collateral below — each is a separate real on-chain market, so switching also switches which pool you're betting into.",
     category: "Stocks",
     pmKeyword: "tesla",
+    variants: [
+      { id: 2, collateralLabel: "ETH" },
+      { id: 6, collateralLabel: "TSLA" },
+    ],
   },
   {
-    id: 3,
+    groupId: "rwaforge-1m",
     question: "Will RWAForge reach $1M total distribution volume by Oct 2026?",
     description: "Resolves YES if the cumulative USD value distributed via RWAForge DistributionRouter exceeds $1,000,000 before November 1, 2026.",
     category: "RWAForge",
     // No pmKeyword - this is RWAForge-specific, no real-world market exists for it.
+    variants: [{ id: 3, collateralLabel: "ETH" }],
   },
   {
-    id: 4,
+    groupId: "btc-120k",
     question: "Will Bitcoin exceed $120,000 before October 2026?",
     description: "Resolves YES if BTC/USD on any major exchange closes above $120,000 before October 1, 2026.",
     category: "Crypto",
     pmKeyword: "bitcoin",
+    variants: [{ id: 4, collateralLabel: "ETH" }],
   },
   {
-    id: 5,
+    groupId: "nvda-q3",
     question: "Will NVIDIA beat Q3 2026 earnings estimates?",
     description: "Resolves YES if NVIDIA reports Q3 2026 EPS above analyst consensus estimates at time of market creation.",
     category: "Stocks",
     pmKeyword: "nvidia",
-  },
-  {
-    id: 6,
-    question: "Will tokenized TSLA exceed $350 before October 2026? (bet with TSLA)",
-    description: "Same real-world question as the ETH-collateralized TSLA market, but this one takes tokenized TSLA itself as collateral — bet with the stock you're predicting on.",
-    category: "Stocks",
-    pmKeyword: "tesla",
+    variants: [{ id: 5, collateralLabel: "ETH" }],
   },
 ];
+
+/** Flat list of every real on-chain market across all groups - used where grouping doesn't matter (e.g. scanning for a user's positions). */
+const ALL_MARKET_VARIANTS = NATIVE_MARKET_GROUPS.flatMap((g) =>
+  g.variants.map((v) => ({ id: v.id, question: g.question }))
+);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -237,12 +260,12 @@ function useOnchainMarket(marketId: number) {
 // ── Native market card with inline bet form ───────────────────────────────────
 
 function NativeCard({
-  market,
+  group,
   expanded,
   onToggle,
   referencePool,
 }: {
-  market: NativeMarket;
+  group: NativeMarketGroup;
   expanded: boolean;
   onToggle: () => void;
   referencePool: PolymarketMarket[];
@@ -251,9 +274,12 @@ function NativeCard({
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
-  const { onchain, collateral, loading, error, refresh, contractAddress, publicClient } = useOnchainMarket(market.id);
 
-  const reference = market.pmKeyword ? findReferenceMarket(referencePool, market.pmKeyword) : null;
+  const [selectedId, setSelectedId] = useState(group.variants[0].id);
+  const selectedVariant = group.variants.find((v) => v.id === selectedId) ?? group.variants[0];
+  const { onchain, collateral, loading, error, refresh, contractAddress, publicClient } = useOnchainMarket(selectedId);
+
+  const reference = group.pmKeyword ? findReferenceMarket(referencePool, group.pmKeyword) : null;
   const referenceYesPct = reference ? parseFloat(reference.outcomePrices[0] ?? "0.5") * 100 : null;
 
   const [side, setSide] = useState<"yes" | "no" | null>(null);
@@ -261,7 +287,14 @@ function NativeCard({
   const [txStatus, setTxStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const catColor = CATEGORY_COLORS[market.category] ?? CATEGORY_COLORS.Market;
+  const handleVariantChange = (id: number) => {
+    setSelectedId(id);
+    setSide(null);
+    setAmount("");
+    setTxStatus(null);
+  };
+
+  const catColor = CATEGORY_COLORS[group.category] ?? CATEGORY_COLORS.Market;
 
   const decimals = collateral?.decimals ?? 18;
   const yesPool = onchain ? Number(formatUnits(onchain.yesPool, decimals)) : 0;
@@ -296,7 +329,7 @@ function NativeCard({
           address: contractAddress,
           abi: PREDICTION_MARKET_ABI,
           functionName: "betETH",
-          args: [BigInt(market.id), isYes],
+          args: [BigInt(selectedId), isYes],
           value: parsedAmount,
         });
       } else {
@@ -323,7 +356,7 @@ function NativeCard({
           address: contractAddress,
           abi: PREDICTION_MARKET_ABI,
           functionName: "bet",
-          args: [BigInt(market.id), isYes, parsedAmount],
+          args: [BigInt(selectedId), isYes, parsedAmount],
         });
       }
 
@@ -350,13 +383,13 @@ function NativeCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1.5">
               <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${catColor}`}>
-                {market.category}
+                {group.category}
               </span>
               <span className="text-xs text-slate-500">{loading && !onchain ? "…" : daysLeft(endTimeMs)}</span>
               <span className="text-xs text-slate-600">· {loading && !onchain ? "…" : `${fmtAmount(total)} ${symbol} vol`}</span>
             </div>
             <p className="text-sm font-medium leading-snug text-slate-100">
-              {market.question}
+              {group.question}
             </p>
             <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
               <div
@@ -408,7 +441,7 @@ function NativeCard({
               <p className="text-xs text-red-300">Couldn't load live market data: {error}</p>
             </div>
           )}
-          <p className="text-xs text-slate-500 mb-3 leading-relaxed">{market.description}</p>
+          <p className="text-xs text-slate-500 mb-3 leading-relaxed">{group.description}</p>
 
           {reference && referenceYesPct !== null && (
             <div className="mb-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
@@ -453,7 +486,25 @@ function NativeCard({
             </button>
           </div>
 
-          {/* Amount — collateral is fixed per-market on-chain, not a free choice */}
+          {/* Collateral — only shown as a dropdown when more than one real on-chain market exists for this question */}
+          {group.variants.length > 1 && (
+            <div className="mb-3">
+              <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-600">
+                Collateral (each option is a separate real market with its own pool)
+              </label>
+              <select
+                value={selectedId}
+                onChange={(e) => handleVariantChange(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
+              >
+                {group.variants.map((v) => (
+                  <option key={v.id} value={v.id}>{v.collateralLabel}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Amount */}
           <div className="flex gap-2 mb-3">
             <input
               type="number"
@@ -532,7 +583,7 @@ function MyPositions() {
     const found: Position[] = [];
 
     await Promise.all(
-      NATIVE_MARKETS.map(async (m) => {
+      ALL_MARKET_VARIANTS.map(async (m) => {
         try {
           const [yesBet, noBet, market, isClaimed] = await Promise.all([
             publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "yesBets", args: [BigInt(m.id), address] }),
@@ -714,9 +765,9 @@ export function PredictionMarkets() {
       .catch(() => setReferencePool([]));
   }, []);
 
-  const filteredNative = filter
-    ? NATIVE_MARKETS.filter((m) => m.question.toLowerCase().includes(filter.toLowerCase()))
-    : NATIVE_MARKETS;
+  const filteredGroups = filter
+    ? NATIVE_MARKET_GROUPS.filter((g) => g.question.toLowerCase().includes(filter.toLowerCase()))
+    : NATIVE_MARKET_GROUPS;
 
   const toggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -753,15 +804,15 @@ export function PredictionMarkets() {
 
         {/* Native markets */}
         <div className="space-y-2">
-          {filteredNative.length === 0 && (
+          {filteredGroups.length === 0 && (
             <p className="text-center text-sm text-slate-500 py-8">No markets match your search.</p>
           )}
-          {filteredNative.map((m) => (
+          {filteredGroups.map((g) => (
             <NativeCard
-              key={m.id}
-              market={m}
-              expanded={expandedId === `native-${m.id}`}
-              onToggle={() => toggle(`native-${m.id}`)}
+              key={g.groupId}
+              group={g}
+              expanded={expandedId === `native-${g.groupId}`}
+              onToggle={() => toggle(`native-${g.groupId}`)}
               referencePool={referencePool}
             />
           ))}
