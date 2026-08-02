@@ -108,4 +108,27 @@ describe("RewardClaimer", () => {
       claimer.connect(alice).claim(entry.index, entry.amount, proofFor(entry.index))
     ).to.emit(claimer, "Claimed");
   });
+
+  it("lets the owner sweep leftover tokens to a recipient", async () => {
+    const { claimer, token, owner, bob } = await deploy();
+    const claimerAddress = await claimer.getAddress();
+    const balanceBefore = await token.balanceOf(claimerAddress);
+
+    await expect(claimer.connect(owner).sweep(await token.getAddress(), bob.address, balanceBefore))
+      .to.emit(claimer, "Swept")
+      .withArgs(await token.getAddress(), bob.address, balanceBefore);
+
+    expect(await token.balanceOf(bob.address)).to.equal(balanceBefore);
+    expect(await token.balanceOf(claimerAddress)).to.equal(0n);
+  });
+
+  it("rejects sweep to the zero address, and from non-owners", async () => {
+    const { claimer, token, owner, alice } = await deploy();
+    await expect(
+      claimer.connect(owner).sweep(await token.getAddress(), ethers.ZeroAddress, 1n)
+    ).to.be.revertedWithCustomError(claimer, "ZeroAddress");
+    await expect(
+      claimer.connect(alice).sweep(await token.getAddress(), alice.address, 1n)
+    ).to.be.revertedWithCustomError(claimer, "OwnableUnauthorizedAccount");
+  });
 });

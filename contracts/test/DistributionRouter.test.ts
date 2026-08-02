@@ -95,4 +95,27 @@ describe("DistributionRouter", () => {
       router.connect(owner).distribute(await token.getAddress(), [alice.address], [1n])
     ).to.be.revertedWithCustomError(router, "EnforcedPause");
   });
+
+  it("owner can update the treasury address", async () => {
+    const { router, owner, alice } = await deploy();
+    await expect(router.connect(owner).setTreasury(alice.address))
+      .to.emit(router, "TreasuryUpdated");
+    expect(await router.treasury()).to.equal(alice.address);
+  });
+
+  it("rejects a zero-address treasury", async () => {
+    const { router, owner } = await deploy();
+    await expect(router.connect(owner).setTreasury(ethers.ZeroAddress)).to.be.revertedWithCustomError(
+      router,
+      "ZeroAddress"
+    );
+  });
+
+  it("owner can unpause, restoring distributions", async () => {
+    const { router, token, owner, alice } = await deploy();
+    await router.connect(owner).pause();
+    await router.connect(owner).unpause();
+    await expect(router.connect(owner).distribute(await token.getAddress(), [alice.address], [1n])).to.not.be
+      .reverted;
+  });
 });

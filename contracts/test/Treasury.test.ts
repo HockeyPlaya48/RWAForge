@@ -91,4 +91,51 @@ describe("Treasury", () => {
     await treasury.connect(governance).withdraw(await feeToken.getAddress(), other.address, ethers.parseEther("10"));
     expect(await feeToken.balanceOf(other.address)).to.equal(ethers.parseEther("10"));
   });
+
+  it("rejects zero recipient or zero amount on withdraw", async () => {
+    const { treasury, feeToken, governance, other } = await deploy();
+    await expect(
+      treasury.connect(governance).withdraw(await feeToken.getAddress(), ethers.ZeroAddress, 1n)
+    ).to.be.revertedWithCustomError(treasury, "ZeroAddress");
+    await expect(
+      treasury.connect(governance).withdraw(await feeToken.getAddress(), other.address, 0n)
+    ).to.be.revertedWithCustomError(treasury, "ZeroAmount");
+  });
+
+  it("notifyFeeReceived emits an event and rejects a zero amount", async () => {
+    const { treasury, feeToken, other } = await deploy();
+    await expect(treasury.connect(other).notifyFeeReceived(await feeToken.getAddress(), 1n))
+      .to.emit(treasury, "FeeReceived")
+      .withArgs(await feeToken.getAddress(), 1n, other.address);
+
+    await expect(
+      treasury.connect(other).notifyFeeReceived(await feeToken.getAddress(), 0n)
+    ).to.be.revertedWithCustomError(treasury, "ZeroAmount");
+  });
+
+  it("decrements tracked rwaHoldings when withdrawing less than the tracked balance", async () => {
+    const { treasury, feeToken, rwaToken, swapRouter, governance, operator, other } = await deploy();
+    await treasury.connect(governance).setSupportedRWA(await rwaToken.getAddress(), true);
+    await treasury
+      .connect(operator)
+      .executeSwap(await swapRouter.getAddress(), await feeToken.getAddress(), await rwaToken.getAddress(), ethers.parseEther("100"), 0n);
+
+    await treasury.connect(governance).withdraw(await rwaToken.getAddress(), other.address, ethers.parseEther("40"));
+    expect(await treasury.rwaHoldings(await rwaToken.getAddress())).to.equal(ethers.parseEther("60"));
+  });
+
+  it("zeroes out tracked rwaHoldings when withdrawing more than the tracked balance", async () => {
+    const { treasury, feeToken, rwaToken, swapRouter, governance, operator, other } = await deploy();
+    await treasury.connect(governance).setSupportedRWA(await rwaToken.getAddress(), true);
+    await treasury
+      .connect(operator)
+      .executeSwap(await swapRouter.getAddress(), await feeToken.getAddress(), await rwaToken.getAddress(), ethers.parseEther("100"), 0n);
+
+    // Simulate an untracked direct deposit, so actual balance (150) exceeds tracked rwaHoldings (100).
+    await rwaToken.mint(await treasury.getAddress(), ethers.parseEther("50"));
+
+    await treasury.connect(governance).withdraw(await rwaToken.getAddress(), other.address, ethers.parseEther("120"));
+    expect(await treasury.rwaHoldings(await rwaToken.getAddress())).to.equal(0n);
+    expect(await rwaToken.balanceOf(other.address)).to.equal(ethers.parseEther("120"));
+  });
 });

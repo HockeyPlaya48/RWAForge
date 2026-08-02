@@ -89,7 +89,7 @@ contract DistributionRouter is Ownable, Pausable, ReentrancyGuard {
         if (len == 0 || len != amounts.length) revert InvalidBatch();
         if (len > MAX_BATCH_SIZE) revert BatchTooLarge();
 
-        uint256 total;
+        uint256 total = 0;
         for (uint256 i; i < len; ++i) {
             if (recipients[i] == address(0)) revert ZeroRecipient();
             if (amounts[i] == 0) revert ZeroAmount();
