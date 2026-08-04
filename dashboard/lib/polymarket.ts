@@ -63,3 +63,16 @@ export function findReferenceMarket(pool: PolymarketMarket[], keyword: string): 
   const match = pool.find((m) => m.question.toLowerCase().includes(kw));
   return match ?? null;
 }
+
+/**
+ * Exact-id match against an already-fetched active-market pool. Used for one-off
+ * event markets (a specific game or match) where a keyword like a team name could
+ * ambiguously match more than one live market (e.g. a moneyline market AND a
+ * season-outcome market for the same team). Once the underlying Polymarket market
+ * closes (the real-world event ended), it naturally drops out of the active pool
+ * and this returns null - same never-show-a-stale-market guarantee as the keyword
+ * matcher.
+ */
+export function findReferenceMarketById(pool: PolymarketMarket[], id: string): PolymarketMarket | null {
+  return pool.find((m) => m.id === id) ?? null;
+}

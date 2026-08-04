@@ -7,7 +7,7 @@ const RH_TESTNET_ID = 46630;
 const ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 import { formatUnits, parseUnits } from "viem";
-import { fetchActiveMarketPool, findReferenceMarket, type PolymarketMarket } from "@/lib/polymarket";
+import { fetchActiveMarketPool, findReferenceMarket, findReferenceMarketById, type PolymarketMarket } from "@/lib/polymarket";
 
 // ── ABI ───────────────────────────────────────────────────────────────────────
 
@@ -100,6 +100,10 @@ type NativeMarketGroup = {
   category: string;
   /** Keyword to best-effort match against live Polymarket markets for reference odds. Omit if no real-world equivalent exists. */
   pmKeyword?: string;
+  /** Exact Polymarket market id for one-off event markets (a specific game/match), where a keyword could ambiguously match more than one live market. Takes priority over pmKeyword when set. */
+  pmId?: string;
+  /** Index into the matched market's outcomePrices that corresponds to OUR question's YES side. Polymarket lists "Team A vs Team B" outcomes in whatever order they choose, which doesn't always put our YES subject first. Defaults to 0. */
+  pmYesIndex?: number;
   variants: MarketVariant[];
 };
 
@@ -155,6 +159,31 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     pmKeyword: "nvidia",
     variants: [{ id: 5, collateralLabel: "ETH" }],
   },
+  {
+    groupId: "mlb-nym-cle",
+    question: "Will the New York Mets beat the Cleveland Guardians tonight (Aug 4, 2026)?",
+    description: "Resolves YES if the Mets win tonight's game against the Guardians. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
+    category: "Sports",
+    pmId: "3201564",
+    variants: [{ id: 7, collateralLabel: "ETH" }],
+  },
+  {
+    groupId: "wta-sabalenka-uchijima",
+    question: "Will Aryna Sabalenka beat Moyuka Uchijima at the National Bank Open?",
+    description: "Resolves YES if Sabalenka wins the match. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
+    category: "Sports",
+    pmId: "3320461",
+    variants: [{ id: 8, collateralLabel: "ETH" }],
+  },
+  {
+    groupId: "atp-rublev-shang",
+    question: "Will Andrey Rublev beat Juncheng Shang at the National Bank Open?",
+    description: "Resolves YES if Rublev wins the match. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
+    category: "Sports",
+    pmId: "3325063",
+    pmYesIndex: 1,
+    variants: [{ id: 9, collateralLabel: "ETH" }],
+  },
 ];
 
 /** Flat list of every real on-chain market across all groups - used where grouping doesn't matter (e.g. scanning for a user's positions). */
@@ -183,6 +212,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Stocks: "text-blue-400 bg-blue-500/10 border-blue-500/20",
   Macro: "text-purple-400 bg-purple-500/10 border-purple-500/20",
   Crypto: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
+  Sports: "text-orange-400 bg-orange-500/10 border-orange-500/20",
   RWAForge: "text-mint bg-mint/10 border-mint/20",
   Market: "text-slate-400 bg-slate-500/10 border-slate-500/20",
 };
@@ -214,7 +244,11 @@ function useOnchainMarket(marketId: number) {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!contractAddress || !publicClient) return;
+    if (!contractAddress || !publicClient) {
+      setLoading(false);
+      setError("Prediction market contract address not configured.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -279,8 +313,13 @@ function NativeCard({
   const selectedVariant = group.variants.find((v) => v.id === selectedId) ?? group.variants[0];
   const { onchain, collateral, loading, error, refresh, contractAddress, publicClient } = useOnchainMarket(selectedId);
 
-  const reference = group.pmKeyword ? findReferenceMarket(referencePool, group.pmKeyword) : null;
-  const referenceYesPct = reference ? parseFloat(reference.outcomePrices[0] ?? "0.5") * 100 : null;
+  const reference = group.pmId
+    ? findReferenceMarketById(referencePool, group.pmId)
+    : group.pmKeyword
+    ? findReferenceMarket(referencePool, group.pmKeyword)
+    : null;
+  const yesIndex = group.pmYesIndex ?? 0;
+  const referenceYesPct = reference ? parseFloat(reference.outcomePrices[yesIndex] ?? "0.5") * 100 : null;
 
   const [side, setSide] = useState<"yes" | "no" | null>(null);
   const [amount, setAmount] = useState("");
@@ -829,8 +868,9 @@ export function PredictionMarkets() {
           token a given market requires, read live from the contract. Most current markets accept native ETH;
           one TSLA-collateralized market is live for testing tokenized-stock collateral. Winners receive a
           proportional share of the total pool minus a 2% protocol fee. Markets resolved by RWAForge operators.
-          Where shown, "Reference" odds are a separate, related market on Polymarket for context only — your
-          bet settles against RWAForge's own pool, not Polymarket's.
+          Where shown, "Reference" odds are a separate, related market on Polymarket for context only, sourced
+          live from Polymarket's public API — your bet settles against RWAForge's own pool, not Polymarket's.
+          Sports markets (MLB, ATP/WTA tennis) are single-game moneylines tied to a real live Polymarket match.
         </p>
       </div>
     </div>
