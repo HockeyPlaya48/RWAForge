@@ -612,6 +612,14 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
               className="rounded-lg bg-mint px-3 py-1.5 text-xs font-semibold text-navy disabled:opacity-40"
             >{busy ? "..." : "Bet"}</button>
           </div>
+          {side && amount && parseFloat(amount) > 0 && (
+            <div className="mt-2 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-400 flex justify-between">
+              <span>Est. payout if {side === "yes" ? "HITS" : "MISSES"} wins</span>
+              <span className="font-medium text-slate-200">
+                {(parseFloat(amount) * (100 / (side === "yes" ? yesPct : noPct))).toFixed(4)} {symbol}
+              </span>
+            </div>
+          )}
           {canResolve && (
             <button onClick={handleResolve} disabled={busy} className="mt-2 w-full rounded-lg border border-slate-700 py-1.5 text-xs text-slate-300 hover:border-slate-500 disabled:opacity-40">
               All legs resolved — settle this parlay
