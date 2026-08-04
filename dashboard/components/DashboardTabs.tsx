@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Portfolio } from "@/components/Portfolio";
 import { CreateDistribution } from "@/components/CreateDistribution";
 import { ClaimRewards } from "@/components/ClaimRewards";
@@ -42,6 +43,12 @@ export function DashboardTabs() {
             {TAB_LABELS[t]}
           </button>
         ))}
+        <Link
+          href="/docs"
+          className="flex-1 rounded-lg px-4 py-2.5 text-center text-sm font-medium text-slate-400 transition-all hover:text-slate-100"
+        >
+          Docs
+        </Link>
       </div>
 
       <p className="mt-3 px-1 text-xs text-slate-500">{TAB_DESCRIPTIONS[tab]}</p>

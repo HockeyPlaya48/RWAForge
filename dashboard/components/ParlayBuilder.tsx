@@ -72,6 +72,16 @@ const COMBO_MARKET_ABI = [
     outputs: [{ name: "", type: "bool" }], stateMutability: "view",
   },
   {
+    type: "function", name: "yesBets",
+    inputs: [{ name: "", type: "uint256" }, { name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }], stateMutability: "view",
+  },
+  {
+    type: "function", name: "noBets",
+    inputs: [{ name: "", type: "uint256" }, { name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }], stateMutability: "view",
+  },
+  {
     type: "function", name: "nextComboId",
     inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view",
   },
@@ -457,6 +467,8 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [myYesBet, setMyYesBet] = useState(0n);
+  const [myNoBet, setMyNoBet] = useState(0n);
 
   useEffect(() => {
     const isEth = combo.collateralToken.toLowerCase() === ETH_SENTINEL.toLowerCase();
@@ -468,10 +480,24 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
     ]).then(([s, d]) => { setSymbol(s); setDecimals(Number(d)); }).catch(() => setSymbol("?"));
   }, [combo.collateralToken, publicClient]);
 
+  const refreshMyPosition = useCallback(() => {
+    if (!comboAddress || !publicClient || !address) { setMyYesBet(0n); setMyNoBet(0n); return; }
+    Promise.all([
+      publicClient.readContract({ address: comboAddress, abi: COMBO_MARKET_ABI, functionName: "yesBets", args: [BigInt(combo.id), address] }),
+      publicClient.readContract({ address: comboAddress, abi: COMBO_MARKET_ABI, functionName: "noBets", args: [BigInt(combo.id), address] }),
+    ]).then(([y, n]) => { setMyYesBet(y); setMyNoBet(n); });
+  }, [comboAddress, publicClient, address, combo.id]);
+
+  useEffect(() => { refreshMyPosition(); }, [refreshMyPosition]);
+
+  const hasPosition = myYesBet > 0n || myNoBet > 0n;
+
   const total = Number(formatUnits(combo.yesPool + combo.noPool, decimals));
   const yesPool = Number(formatUnits(combo.yesPool, decimals));
   const yesPct = total > 0 ? (yesPool / total) * 100 : 50;
   const noPct = 100 - yesPct;
+  const hitsMultiplier = yesPct > 0 ? 100 / yesPct : 0;
+  const missesMultiplier = noPct > 0 ? 100 / noPct : 0;
 
   const allLegsResolved = combo.legMarketIds.every((id) => legs[Number(id)]?.outcome !== 0 && legs[Number(id)] !== undefined);
   const comboBettingClosed = Date.now() >= Number(combo.endTime) * 1000;
@@ -517,6 +543,7 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
       setStatus(`Bet placed! ${hash.slice(0, 10)}…`);
       setSide(null);
       setAmount("");
+      refreshMyPosition();
       onChanged();
     } catch (err) {
       setStatus(err instanceof Error ? err.message.slice(0, 160) : "Transaction failed.");
@@ -585,11 +612,28 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
       <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden mb-2">
         <div className="h-full rounded-full bg-gradient-to-r from-green-500 to-green-400" style={{ width: `${yesPct.toFixed(1)}%` }} />
       </div>
-      <p className="text-[10px] text-slate-600 mb-3">
+      <p className="text-[10px] text-slate-600 mb-1">
         Hits: {yesPct.toFixed(0)}¢ · Misses: {noPct.toFixed(0)}¢ · {fmtAmount(total)} {symbol} pool
       </p>
+      <p className="text-[10px] text-slate-500 mb-3">
+        Betting HITS now pays ~{hitsMultiplier.toFixed(2)}× · Betting MISSES now pays ~{missesMultiplier.toFixed(2)}×
+      </p>
 
-      {combo.outcome === 0 && (
+      {combo.outcome === 0 && hasPosition && (
+        <div className="rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 mb-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-600">Your position — one bet per side per parlay</p>
+          <div className="mt-1 flex gap-4 text-xs">
+            {myYesBet > 0n && (
+              <span className="text-green-400 font-medium">{fmtAmount(Number(formatUnits(myYesBet, decimals)))} {symbol} on HITS</span>
+            )}
+            {myNoBet > 0n && (
+              <span className="text-red-400 font-medium">{fmtAmount(Number(formatUnits(myNoBet, decimals)))} {symbol} on MISSES</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {combo.outcome === 0 && !hasPosition && (
         <>
           <div className="flex gap-2 mb-2">
             <button
@@ -620,12 +664,13 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
               </span>
             </div>
           )}
-          {canResolve && (
-            <button onClick={handleResolve} disabled={busy} className="mt-2 w-full rounded-lg border border-slate-700 py-1.5 text-xs text-slate-300 hover:border-slate-500 disabled:opacity-40">
-              All legs resolved — settle this parlay
-            </button>
-          )}
         </>
+      )}
+
+      {combo.outcome === 0 && canResolve && (
+        <button onClick={handleResolve} disabled={busy} className="mt-2 w-full rounded-lg border border-slate-700 py-1.5 text-xs text-slate-300 hover:border-slate-500 disabled:opacity-40">
+          All legs resolved — settle this parlay
+        </button>
       )}
 
       {combo.outcome !== 0 && (
