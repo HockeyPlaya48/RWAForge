@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { DashboardTabs } from "@/components/DashboardTabs";
 import { GetStarted } from "@/components/GetStarted";
@@ -17,7 +18,12 @@ export default function Home() {
             <p className="text-xs text-slate-500">Forge Real Value Onchain</p>
           </div>
         </div>
-        <ConnectWallet />
+        <div className="flex items-center gap-3">
+          <Link href="/docs" className="hidden sm:block text-xs font-medium text-slate-400 hover:text-slate-200">
+            How it works
+          </Link>
+          <ConnectWallet />
+        </div>
       </header>
 
       <div className="mt-6 flex items-center gap-2">
