@@ -165,7 +165,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if the Mets win tonight's game against the Guardians. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
     category: "Sports",
     pmId: "3201564",
-    variants: [{ id: 7, collateralLabel: "ETH" }],
+    variants: [
+      { id: 7, collateralLabel: "ETH" },
+      { id: 10, collateralLabel: "TSLA" },
+    ],
   },
   {
     groupId: "wta-sabalenka-uchijima",
@@ -173,7 +176,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if Sabalenka wins the match. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
     category: "Sports",
     pmId: "3320461",
-    variants: [{ id: 8, collateralLabel: "ETH" }],
+    variants: [
+      { id: 8, collateralLabel: "ETH" },
+      { id: 11, collateralLabel: "TSLA" },
+    ],
   },
   {
     groupId: "atp-rublev-shang",
@@ -182,7 +188,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     category: "Sports",
     pmId: "3325063",
     pmYesIndex: 1,
-    variants: [{ id: 9, collateralLabel: "ETH" }],
+    variants: [
+      { id: 9, collateralLabel: "ETH" },
+      { id: 12, collateralLabel: "TSLA" },
+    ],
   },
 ];
 
