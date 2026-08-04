@@ -1,0 +1,7 @@
+{
+  "network": "robinhoodTestnet",
+  "chainId": 46630,
+  "BankrollVault": "0xA88FcF1d1C0bE8A0e4dA616D71B245446f9C65F9",
+  "PredictionMarket": "0x3E157Af4d13921e2b2347Dd813705C5E78eC9E76",
+  "ComboMarket": "0x72c284eE19A29B86340A54Baf5440Ea6f6D12b4e"
+}
