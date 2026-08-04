@@ -8,6 +8,7 @@ const ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 import { formatUnits, parseUnits } from "viem";
 import { fetchActiveMarketPool, findReferenceMarket, findReferenceMarketById, type PolymarketMarket } from "@/lib/polymarket";
+import { ParlayBuilder } from "@/components/ParlayBuilder";
 
 // ── ABI ───────────────────────────────────────────────────────────────────────
 
@@ -868,6 +869,8 @@ export function PredictionMarkets() {
       </div>
 
       <MyPositions />
+
+      <ParlayBuilder />
 
       {/* Footer info */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-5 py-4">
