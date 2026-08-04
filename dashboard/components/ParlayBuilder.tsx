@@ -197,6 +197,22 @@ function BuildParlay({ legs, legsLoading, onCreated }: { legs: Record<number, Le
   const openLegs = LEG_CATALOGUE.filter((l) => legs[l.id] && legs[l.id].outcome === 0);
   const selectedIds = Object.keys(picks).map(Number);
 
+  // Combined implied probability from each leg's CURRENT pool odds (not the combo's own,
+  // usually-empty pool). Same idea as a sportsbook parlay calculator: multiply each leg's
+  // odds together. This is an estimate, not a promise — real payout is pari-mutuel and
+  // depends on what others have staked into this exact combo by the time it resolves.
+  const legProbabilities = selectedIds.map((id) => {
+    const leg = legs[id];
+    const total = Number(formatUnits(leg.yesPool + leg.noPool, 18));
+    if (total === 0) return 0.5;
+    const pickPool = Number(formatUnits(picks[id] ? leg.yesPool : leg.noPool, 18));
+    return Math.max(pickPool / total, 0.01); // floor at 1% so a single 0-volume side doesn't imply infinite odds
+  });
+  const combinedProbability = legProbabilities.reduce((acc, p) => acc * p, 1);
+  const impliedMultiplier = combinedProbability > 0 ? (1 / combinedProbability) * 0.98 : 0; // × (1 - 2% protocol fee)
+  const parsedAmount = parseFloat(amount) || 0;
+  const estimatedPayout = parsedAmount * impliedMultiplier;
+
   const toggleLeg = (id: number) => {
     setPicks((prev) => {
       const next = { ...prev };
@@ -360,6 +376,23 @@ function BuildParlay({ legs, legsLoading, onCreated }: { legs: Record<number, Le
           {submitting ? "..." : `Create parlay (${selectedIds.length} legs)`}
         </button>
       </div>
+
+      {selectedIds.length >= 2 && (
+        <div className="mt-3 rounded-lg border border-mint/20 bg-mint/[0.04] px-3 py-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs text-slate-400">
+              Combined odds <span className="text-slate-200 font-medium">{impliedMultiplier.toFixed(2)}×</span> from current leg odds
+            </p>
+            <p className="text-[10px] text-slate-600 mt-0.5">
+              Estimate only — actual payout is pari-mutuel and depends on the pool at resolution, same as every RWAForge market.
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[10px] text-slate-500">Est. payout if all hit</p>
+            <p className="text-sm font-semibold text-mint">{estimatedPayout.toFixed(4)} {collateral.label}</p>
+          </div>
+        </div>
+      )}
 
       {status && <p className="mt-2 break-all text-xs text-slate-400">{status}</p>}
     </div>
