@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/resolve-sports-markets",
+      "schedule": "0 13 * * *"
+    },
+    {
       "path": "/api/cron/daily-sports-markets",
       "schedule": "0 14 * * *"
     }

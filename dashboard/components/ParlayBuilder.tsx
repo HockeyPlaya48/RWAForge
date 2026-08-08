@@ -499,6 +499,19 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
   const hitsMultiplier = yesPct > 0 ? 100 / yesPct : 0;
   const missesMultiplier = noPct > 0 ? 100 / noPct : 0;
 
+  // Exact payout math from ComboMarket._computePayout - not a rough multiplier.
+  // Pari-mutuel, so this is a live estimate: it only reflects the pool right now and
+  // will move as more people bet either side before resolution.
+  const FEE_BPS = 200n; // 2%, matches the contract's default feeBps
+  const totalPoolRaw = combo.yesPool + combo.noPool;
+  const payablePoolRaw = (totalPoolRaw * (10_000n - FEE_BPS)) / 10_000n;
+  const myPositionPayoutRaw =
+    myYesBet > 0n && combo.yesPool > 0n ? (myYesBet * payablePoolRaw) / combo.yesPool
+    : myNoBet > 0n && combo.noPool > 0n ? (myNoBet * payablePoolRaw) / combo.noPool
+    : 0n;
+  const myPositionSide: "yes" | "no" | null = myYesBet > 0n ? "yes" : myNoBet > 0n ? "no" : null;
+  const myStakeRaw = myYesBet > 0n ? myYesBet : myNoBet;
+
   const allLegsResolved = combo.legMarketIds.every((id) => legs[Number(id)]?.outcome !== 0 && legs[Number(id)] !== undefined);
   const comboBettingClosed = Date.now() >= Number(combo.endTime) * 1000;
   const canResolve = combo.outcome === 0 && comboBettingClosed && allLegsResolved;
@@ -600,10 +613,19 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
         {combo.legMarketIds.map((id, i) => {
           const leg = legs[Number(id)];
           const pick = combo.legPicks[i];
+          const legOutcome = leg?.outcome ?? 0;
+          const hit = (legOutcome === 1 && pick) || (legOutcome === 2 && !pick);
+          const missed = (legOutcome === 1 && !pick) || (legOutcome === 2 && pick);
+          const cancelled = legOutcome === 3;
+          const statusLabel = cancelled ? "Cancelled" : hit ? "Already hit" : missed ? "Already missed" : "Pending";
+          const statusColor = cancelled ? "text-slate-500" : hit ? "text-green-400" : missed ? "text-red-400" : "text-slate-500";
           return (
             <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
               <span className={`shrink-0 font-bold ${pick ? "text-green-400" : "text-red-400"}`}>{pick ? "YES" : "NO"}</span>
-              <span className="min-w-0">{leg?.question ?? `Market #${id}`}</span>
+              <span className="min-w-0 flex-1">{leg?.question ?? `Market #${id}`}</span>
+              <span className={`shrink-0 text-[10px] font-medium ${statusColor}`}>
+                {hit ? "✓ " : missed ? "✗ " : ""}{statusLabel}
+              </span>
             </li>
           );
         })}
@@ -616,7 +638,7 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
         Hits: {yesPct.toFixed(0)}¢ · Misses: {noPct.toFixed(0)}¢ · {fmtAmount(total)} {symbol} pool
       </p>
       <p className="text-[10px] text-slate-500 mb-3">
-        Betting HITS now pays ~{hitsMultiplier.toFixed(2)}× · Betting MISSES now pays ~{missesMultiplier.toFixed(2)}×
+        A new bet now would pay ~{hitsMultiplier.toFixed(2)}× on HITS · ~{missesMultiplier.toFixed(2)}× on MISSES
       </p>
 
       {combo.outcome === 0 && hasPosition && (
@@ -630,6 +652,20 @@ function ParlayCard({ combo, legs, onChanged }: { combo: ComboState; legs: Recor
               <span className="text-red-400 font-medium">{fmtAmount(Number(formatUnits(myNoBet, decimals)))} {symbol} on MISSES</span>
             )}
           </div>
+          <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
+            <span className="text-[10px] text-slate-500">
+              If {myPositionSide === "yes" ? "HITS" : "MISSES"} wins right now, you'd get
+            </span>
+            <span className="text-xs font-semibold text-mint">
+              {fmtAmount(Number(formatUnits(myPositionPayoutRaw, decimals)))} {symbol}
+            </span>
+          </div>
+          {myStakeRaw > 0n && myPositionPayoutRaw <= myStakeRaw && (
+            <p className="mt-1 text-[10px] text-yellow-500/80">
+              This is close to your stake back, not a real profit — the other side of this parlay is too thin
+              relative to yours. More bettors on either side, or a bankroll vault top-up, would improve it.
+            </p>
+          )}
         </div>
       )}
 
