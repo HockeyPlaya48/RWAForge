@@ -14,6 +14,10 @@ import { ParlayBuilder } from "@/components/ParlayBuilder";
 
 const PREDICTION_MARKET_ABI = [
   {
+    type: "function", name: "nextMarketId",
+    inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view",
+  },
+  {
     type: "function", name: "bet",
     inputs: [
       { name: "marketId", type: "uint256" },
@@ -115,7 +119,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if AAPL closes above $220 on September 30, 2026 per Robinhood's tokenized equity price feed.",
     category: "Stocks",
     pmKeyword: "apple",
-    variants: [{ id: 0, collateralLabel: "ETH" }],
+    variants: [
+      { id: 0, collateralLabel: "ETH" },
+      { id: 13, collateralLabel: "TSLA" },
+    ],
   },
   {
     groupId: "fed-sep26",
@@ -123,7 +130,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if the FOMC announces a rate cut at the September 2026 meeting.",
     category: "Macro",
     pmKeyword: "fed",
-    variants: [{ id: 1, collateralLabel: "ETH" }],
+    variants: [
+      { id: 1, collateralLabel: "ETH" },
+      { id: 14, collateralLabel: "TSLA" },
+    ],
   },
   {
     groupId: "tsla-350",
@@ -142,7 +152,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if the cumulative USD value distributed via RWAForge DistributionRouter exceeds $1,000,000 before November 1, 2026.",
     category: "RWAForge",
     // No pmKeyword - this is RWAForge-specific, no real-world market exists for it.
-    variants: [{ id: 3, collateralLabel: "ETH" }],
+    variants: [
+      { id: 3, collateralLabel: "ETH" },
+      { id: 15, collateralLabel: "TSLA" },
+    ],
   },
   {
     groupId: "btc-120k",
@@ -150,7 +163,10 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if BTC/USD on any major exchange closes above $120,000 before October 1, 2026.",
     category: "Crypto",
     pmKeyword: "bitcoin",
-    variants: [{ id: 4, collateralLabel: "ETH" }],
+    variants: [
+      { id: 4, collateralLabel: "ETH" },
+      { id: 16, collateralLabel: "TSLA" },
+    ],
   },
   {
     groupId: "nvda-q3",
@@ -158,48 +174,88 @@ const NATIVE_MARKET_GROUPS: NativeMarketGroup[] = [
     description: "Resolves YES if NVIDIA reports Q3 2026 EPS above analyst consensus estimates at time of market creation.",
     category: "Stocks",
     pmKeyword: "nvidia",
-    variants: [{ id: 5, collateralLabel: "ETH" }],
-  },
-  {
-    groupId: "mlb-nym-cle",
-    question: "Will the New York Mets beat the Cleveland Guardians tonight (Aug 4, 2026)?",
-    description: "Resolves YES if the Mets win tonight's game against the Guardians. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
-    category: "Sports",
-    pmId: "3201564",
     variants: [
-      { id: 7, collateralLabel: "ETH" },
-      { id: 10, collateralLabel: "TSLA" },
-    ],
-  },
-  {
-    groupId: "wta-sabalenka-uchijima",
-    question: "Will Aryna Sabalenka beat Moyuka Uchijima at the National Bank Open?",
-    description: "Resolves YES if Sabalenka wins the match. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
-    category: "Sports",
-    pmId: "3320461",
-    variants: [
-      { id: 8, collateralLabel: "ETH" },
-      { id: 11, collateralLabel: "TSLA" },
-    ],
-  },
-  {
-    groupId: "atp-rublev-shang",
-    question: "Will Andrey Rublev beat Juncheng Shang at the National Bank Open?",
-    description: "Resolves YES if Rublev wins the match. Live moneyline reference odds below are sourced from Polymarket's real order book for this exact matchup.",
-    category: "Sports",
-    pmId: "3325063",
-    pmYesIndex: 1,
-    variants: [
-      { id: 9, collateralLabel: "ETH" },
-      { id: 12, collateralLabel: "TSLA" },
+      { id: 5, collateralLabel: "ETH" },
+      { id: 17, collateralLabel: "TSLA" },
     ],
   },
 ];
 
-/** Flat list of every real on-chain market across all groups - used where grouping doesn't matter (e.g. scanning for a user's positions). */
-const ALL_MARKET_VARIANTS = NATIVE_MARKET_GROUPS.flatMap((g) =>
+/** Every on-chain market id already claimed by a curated group above - the dynamic
+ * sports scanner below skips these so nothing is ever shown twice. */
+const STATIC_MARKET_IDS = new Set(NATIVE_MARKET_GROUPS.flatMap((g) => g.variants.map((v) => v.id)));
+
+/** Known collateral tokens we can label without an extra RPC call. */
+const KNOWN_COLLATERAL_LABELS: Record<string, string> = {
+  [ETH_SENTINEL.toLowerCase()]: "ETH",
+  "0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e": "TSLA",
+};
+
+function labelForCollateral(token: string): string {
+  return KNOWN_COLLATERAL_LABELS[token.toLowerCase()] ?? `${token.slice(0, 6)}…`;
+}
+
+/** Flat list of every real on-chain market in the curated groups - used where grouping doesn't matter (e.g. scanning for a user's positions). */
+const STATIC_MARKET_VARIANTS = NATIVE_MARKET_GROUPS.flatMap((g) =>
   g.variants.map((v) => ({ id: v.id, question: g.question }))
 );
+
+/**
+ * Sports markets aren't hardcoded - a script creates fresh ones daily from real,
+ * live games (Polymarket's moneyline markets), and this hook discovers whatever
+ * the contract currently has beyond the curated list above, grouping same-question
+ * ETH/TSLA pairs into one dropdown card exactly like the curated groups. No redeploy
+ * needed for new markets to show up; only the newest ones stay visible so old,
+ * resolved games age out on their own.
+ */
+const MAX_DYNAMIC_MARKET_IDS = 24;
+
+function useDynamicSportsGroups() {
+  const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
+  const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}` | undefined;
+  const [groups, setGroups] = useState<NativeMarketGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!contractAddress || !publicClient) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const nextId = await publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "nextMarketId" });
+      const allIds = Array.from({ length: Number(nextId) }, (_, i) => i).filter((id) => !STATIC_MARKET_IDS.has(id));
+      const recentIds = allIds.slice(-MAX_DYNAMIC_MARKET_IDS);
+
+      const markets = await Promise.all(
+        recentIds.map((id) => publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "getMarket", args: [BigInt(id)] }))
+      );
+
+      const byQuestion = new Map<string, NativeMarketGroup>();
+      recentIds.forEach((id, i) => {
+        const m = markets[i];
+        if (!m.question) return;
+        const existing = byQuestion.get(m.question);
+        const variant = { id, collateralLabel: labelForCollateral(m.collateralToken) };
+        if (existing) {
+          existing.variants.push(variant);
+        } else {
+          byQuestion.set(m.question, {
+            groupId: `dyn-${id}`,
+            question: m.question,
+            description: "A live moneyline market created from today's real games (sourced from Polymarket) - not a fixed, hand-written question.",
+            category: "Sports",
+            variants: [variant],
+          });
+        }
+      });
+
+      setGroups(Array.from(byQuestion.values()).reverse());
+    } finally {
+      setLoading(false);
+    }
+  }, [contractAddress, publicClient]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  return { groups, loading, refresh };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -615,7 +671,7 @@ type Position = {
   decimals: number;
 };
 
-function MyPositions() {
+function MyPositions({ variants }: { variants: { id: number; question: string }[] }) {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
@@ -632,7 +688,7 @@ function MyPositions() {
     const found: Position[] = [];
 
     await Promise.all(
-      ALL_MARKET_VARIANTS.map(async (m) => {
+      variants.map(async (m) => {
         try {
           const [yesBet, noBet, market, isClaimed] = await Promise.all([
             publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "yesBets", args: [BigInt(m.id), address] }),
@@ -669,7 +725,7 @@ function MyPositions() {
     found.sort((a, b) => a.id - b.id);
     setPositions(found);
     setLoaded(true);
-  }, [address, contractAddress, publicClient]);
+  }, [address, contractAddress, publicClient, variants]);
 
   useEffect(() => {
     fetchPositions();
@@ -807,6 +863,7 @@ export function PredictionMarkets() {
   const [filter, setFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [referencePool, setReferencePool] = useState<PolymarketMarket[]>([]);
+  const { groups: dynamicGroups, loading: dynamicLoading } = useDynamicSportsGroups();
 
   useEffect(() => {
     fetchActiveMarketPool()
@@ -814,9 +871,15 @@ export function PredictionMarkets() {
       .catch(() => setReferencePool([]));
   }, []);
 
+  const allGroups = [...NATIVE_MARKET_GROUPS, ...dynamicGroups];
+  const allVariants = [
+    ...STATIC_MARKET_VARIANTS,
+    ...dynamicGroups.flatMap((g) => g.variants.map((v) => ({ id: v.id, question: g.question }))),
+  ];
+
   const filteredGroups = filter
-    ? NATIVE_MARKET_GROUPS.filter((g) => g.question.toLowerCase().includes(filter.toLowerCase()))
-    : NATIVE_MARKET_GROUPS;
+    ? allGroups.filter((g) => g.question.toLowerCase().includes(filter.toLowerCase()))
+    : allGroups;
 
   const toggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -865,10 +928,11 @@ export function PredictionMarkets() {
               referencePool={referencePool}
             />
           ))}
+          {dynamicLoading && <p className="text-center text-xs text-slate-600 py-2">Loading today's live sports markets…</p>}
         </div>
       </div>
 
-      <MyPositions />
+      <MyPositions variants={allVariants} />
 
       <ParlayBuilder />
 
@@ -877,12 +941,13 @@ export function PredictionMarkets() {
         <p className="text-xs leading-relaxed text-slate-500">
           <span className="font-medium text-slate-400">Collateral:</span>{" "}
           Each market's accepted collateral is fixed at creation — the amount field above shows exactly which
-          token a given market requires, read live from the contract. Most current markets accept native ETH;
-          one TSLA-collateralized market is live for testing tokenized-stock collateral. Winners receive a
-          proportional share of the total pool minus a 2% protocol fee. Markets resolved by RWAForge operators.
-          Where shown, "Reference" odds are a separate, related market on Polymarket for context only, sourced
-          live from Polymarket's public API — your bet settles against RWAForge's own pool, not Polymarket's.
-          Sports markets (MLB, ATP/WTA tennis) are single-game moneylines tied to a real live Polymarket match.
+          token a given market requires, read live from the contract. Most markets accept both ETH and TSLA as
+          separate real pools, selectable from the dropdown. Winners receive a proportional share of the total
+          pool minus a 2% protocol fee. Markets resolved by RWAForge operators. Where shown, "Reference" odds are
+          a separate, related market on Polymarket for context only, sourced live from Polymarket's public API —
+          your bet settles against RWAForge's own pool, not Polymarket's.{" "}
+          <span className="font-medium text-slate-400">Sports markets</span> (MLB, ATP/WTA tennis) are created
+          fresh daily from real, currently-live games — old ones roll off automatically as new ones are created.
         </p>
       </div>
     </div>
