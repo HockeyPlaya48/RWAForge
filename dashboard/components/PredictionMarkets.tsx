@@ -214,6 +214,7 @@ function useDynamicSportsGroups() {
   const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
   const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}` | undefined;
   const [groups, setGroups] = useState<NativeMarketGroup[]>([]);
+  const [allVariants, setAllVariants] = useState<{ id: number; question: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -228,14 +229,18 @@ function useDynamicSportsGroups() {
         recentIds.map((id) => publicClient.readContract({ address: contractAddress, abi: PREDICTION_MARKET_ABI, functionName: "getMarket", args: [BigInt(id)] }))
       );
 
-      const byQuestion = new Map<string, NativeMarketGroup>();
+      const now = Date.now();
+      type GroupWithState = NativeMarketGroup & { stillOpen: boolean };
+      const byQuestion = new Map<string, GroupWithState>();
       recentIds.forEach((id, i) => {
         const m = markets[i];
         if (!m.question) return;
+        const variantOpen = Number(m.outcome) === 0 && Number(m.endTime) * 1000 > now;
         const existing = byQuestion.get(m.question);
         const variant = { id, collateralLabel: labelForCollateral(m.collateralToken) };
         if (existing) {
           existing.variants.push(variant);
+          existing.stillOpen = existing.stillOpen || variantOpen;
         } else {
           byQuestion.set(m.question, {
             groupId: `dyn-${id}`,
@@ -243,18 +248,24 @@ function useDynamicSportsGroups() {
             description: "A live moneyline market created from today's real games (sourced from Polymarket) - not a fixed, hand-written question.",
             category: "Sports",
             variants: [variant],
+            stillOpen: variantOpen,
           });
         }
       });
 
-      setGroups(Array.from(byQuestion.values()).reverse());
+      // Once betting closes on every variant of a game, drop it from the browse list -
+      // the next daily run brings in a fresh game to replace it. Closed/resolved markets
+      // stay fully claimable; they just aren't surfaced here anymore.
+      const all = Array.from(byQuestion.values());
+      setGroups(all.filter((g) => g.stillOpen).reverse());
+      setAllVariants(all.flatMap((g) => g.variants.map((v) => ({ id: v.id, question: g.question }))));
     } finally {
       setLoading(false);
     }
   }, [contractAddress, publicClient]);
 
   useEffect(() => { refresh(); }, [refresh]);
-  return { groups, loading, refresh };
+  return { groups, allVariants, loading, refresh };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -863,7 +874,7 @@ export function PredictionMarkets() {
   const [filter, setFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [referencePool, setReferencePool] = useState<PolymarketMarket[]>([]);
-  const { groups: dynamicGroups, loading: dynamicLoading } = useDynamicSportsGroups();
+  const { groups: dynamicGroups, allVariants: dynamicVariants, loading: dynamicLoading } = useDynamicSportsGroups();
 
   useEffect(() => {
     fetchActiveMarketPool()
@@ -872,10 +883,7 @@ export function PredictionMarkets() {
   }, []);
 
   const allGroups = [...NATIVE_MARKET_GROUPS, ...dynamicGroups];
-  const allVariants = [
-    ...STATIC_MARKET_VARIANTS,
-    ...dynamicGroups.flatMap((g) => g.variants.map((v) => ({ id: v.id, question: g.question }))),
-  ];
+  const allVariants = [...STATIC_MARKET_VARIANTS, ...dynamicVariants];
 
   const filteredGroups = filter
     ? allGroups.filter((g) => g.question.toLowerCase().includes(filter.toLowerCase()))
