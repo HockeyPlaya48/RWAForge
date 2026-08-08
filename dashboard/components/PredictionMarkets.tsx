@@ -201,16 +201,18 @@ const STATIC_MARKET_VARIANTS = NATIVE_MARKET_GROUPS.flatMap((g) =>
 );
 
 /**
- * Sports markets aren't hardcoded - a script creates fresh ones daily from real,
- * live games (Polymarket's moneyline markets), and this hook discovers whatever
- * the contract currently has beyond the curated list above, grouping same-question
- * ETH/TSLA pairs into one dropdown card exactly like the curated groups. No redeploy
- * needed for new markets to show up; only the newest ones stay visible so old,
- * resolved games age out on their own.
+ * Sports and crypto Up/Down markets aren't hardcoded - a daily job creates sports
+ * markets from real live games (Polymarket's moneyline markets), and a rolling sync
+ * keeps one live BTC/ETH "exceed $X in the next hour?" market open per asset (real
+ * Coinbase prices). This hook discovers whatever the contract currently has beyond
+ * the curated list above, grouping same-question ETH/TSLA pairs into one dropdown
+ * card exactly like the curated groups. No redeploy needed for new markets to show
+ * up; only the newest ones stay visible so old, resolved ones age out on their own.
  */
-const MAX_DYNAMIC_MARKET_IDS = 24;
+const MAX_DYNAMIC_MARKET_IDS = 30;
+const CRYPTO_QUESTION_PATTERN = /^Will (BTC|ETH) exceed \$/;
 
-function useDynamicSportsGroups() {
+function useDynamicMarketGroups() {
   const publicClient = usePublicClient({ chainId: RH_TESTNET_ID });
   const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}` | undefined;
   const [groups, setGroups] = useState<NativeMarketGroup[]>([]);
@@ -238,6 +240,7 @@ function useDynamicSportsGroups() {
         const variantOpen = Number(m.outcome) === 0 && Number(m.endTime) * 1000 > now;
         const existing = byQuestion.get(m.question);
         const variant = { id, collateralLabel: labelForCollateral(m.collateralToken) };
+        const isCrypto = CRYPTO_QUESTION_PATTERN.test(m.question);
         if (existing) {
           existing.variants.push(variant);
           existing.stillOpen = existing.stillOpen || variantOpen;
@@ -245,8 +248,10 @@ function useDynamicSportsGroups() {
           byQuestion.set(m.question, {
             groupId: `dyn-${id}`,
             question: m.question,
-            description: "A live moneyline market created from today's real games (sourced from Polymarket) - not a fixed, hand-written question.",
-            category: "Sports",
+            description: isCrypto
+              ? "A live 1-hour market on real Coinbase spot price - resolves against the actual close price at expiry, not an estimate."
+              : "A live moneyline market created from today's real games (sourced from Polymarket) - not a fixed, hand-written question.",
+            category: isCrypto ? "Crypto" : "Sports",
             variants: [variant],
             stillOpen: variantOpen,
           });
@@ -292,6 +297,15 @@ const CATEGORY_COLORS: Record<string, string> = {
   Sports: "text-orange-400 bg-orange-500/10 border-orange-500/20",
   RWAForge: "text-mint bg-mint/10 border-mint/20",
   Market: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+};
+
+const CATEGORY_ICONS: Record<string, string> = {
+  Stocks: "📈",
+  Macro: "🏛",
+  Crypto: "₿",
+  Sports: "🏆",
+  RWAForge: "⚡",
+  Market: "◆",
 };
 
 // ── On-chain market data ────────────────────────────────────────────────────
@@ -489,183 +503,180 @@ function NativeCard({
   };
 
   return (
-    <div className={`rounded-xl border transition-colors ${expanded ? "border-slate-600 bg-slate-900/80" : "border-slate-800 bg-slate-900/40 hover:border-slate-700"}`}>
-      {/* Summary row — always visible, click to expand */}
+    <>
+      {/* Compact grid tile — click opens the full detail/bet panel */}
       <button
         onClick={onToggle}
-        className="w-full text-left p-4"
+        className="flex h-full w-full flex-col rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-left transition-colors hover:border-slate-600"
       >
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${catColor}`}>
-                {group.category}
-              </span>
-              <span className="text-xs text-slate-500">{loading && !onchain ? "…" : daysLeft(endTimeMs)}</span>
-              <span className="text-xs text-slate-600">· {loading && !onchain ? "…" : `${fmtAmount(total)} ${symbol} vol`}</span>
-            </div>
-            <p className="text-sm font-medium leading-snug text-slate-100">
-              {group.question}
-            </p>
-            <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-green-500 to-green-400"
-                style={{ width: `${yesPct.toFixed(1)}%` }}
-              />
-            </div>
-            {reference && referenceYesPct !== null && (
-              <p className="mt-2 text-[11px] text-slate-500">
-                Reference (Polymarket, separate market — not what you're betting into): "{reference.question}" ·{" "}
-                <span className="text-slate-400">{Math.round(referenceYesPct)}¢ YES</span>
-              </p>
-            )}
-          </div>
-          <div className="shrink-0 flex gap-2 text-center">
-            <div className="w-14">
-              <p className="text-[10px] text-slate-500">YES</p>
-              <p className="text-sm font-bold text-green-400">{loading && !onchain ? "…" : `${yesPct.toFixed(0)}¢`}</p>
-            </div>
-            <div className="w-14">
-              <p className="text-[10px] text-slate-500">NO</p>
-              <p className="text-sm font-bold text-red-400">{loading && !onchain ? "…" : `${noPct.toFixed(0)}¢`}</p>
-            </div>
-            <div className="flex items-center pl-1">
-              <svg
-                className={`h-4 w-4 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-sm ${catColor}`}>
+            {CATEGORY_ICONS[group.category] ?? CATEGORY_ICONS.Market}
+          </span>
+          <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${catColor}`}>
+            {group.category}
+          </span>
+          <span className="ml-auto text-[10px] text-slate-600">{loading && !onchain ? "…" : daysLeft(endTimeMs)}</span>
         </div>
+
+        <p className="line-clamp-3 flex-1 text-sm font-medium leading-snug text-slate-100">
+          {group.question}
+        </p>
+
+        <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+          <div className="h-full rounded-full bg-gradient-to-r from-green-500 to-green-400" style={{ width: `${yesPct.toFixed(1)}%` }} />
+        </div>
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="text-xs font-bold text-green-400">{loading && !onchain ? "…" : `${yesPct.toFixed(0)}¢ YES`}</span>
+          <span className="text-xs font-bold text-red-400">{loading && !onchain ? "…" : `${noPct.toFixed(0)}¢ NO`}</span>
+        </div>
+        <p className="mt-2 text-[10px] text-slate-600">{loading && !onchain ? "…" : `${fmtAmount(total)} ${symbol} vol`}</p>
       </button>
 
-      {/* Expanded bet panel */}
+      {/* Detail / bet modal */}
       {expanded && (
-        <div className="px-4 pb-4 border-t border-slate-800 pt-4">
-          {chainId !== RH_TESTNET_ID && isConnected && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
-              <span className="text-yellow-400 text-xs">⚠</span>
-              <p className="text-xs text-yellow-300">
-                Wrong network. Click Bet and you'll be prompted to switch to RH Chain Testnet.
-              </p>
-            </div>
-          )}
-          {error && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-              <p className="text-xs text-red-300">Couldn't load live market data: {error}</p>
-            </div>
-          )}
-          <p className="text-xs text-slate-500 mb-3 leading-relaxed">{group.description}</p>
-
-          {reference && referenceYesPct !== null && (
-            <div className="mb-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wide text-slate-600">
-                Reference — a related, separate market on Polymarket (not what your bet settles against)
-              </p>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <p className="text-xs text-slate-400 truncate">{reference.question}</p>
-                <a
-                  href={`https://polymarket.com/event/${reference.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-xs font-medium text-mint hover:underline"
-                >
-                  {Math.round(referenceYesPct)}¢ YES ↗
-                </a>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onToggle}>
+          <div
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${catColor}`}>
+                  {group.category}
+                </span>
+                <p className="mt-2 text-sm font-semibold leading-snug text-slate-100">{group.question}</p>
               </div>
+              <button onClick={onToggle} className="shrink-0 text-slate-500 hover:text-slate-300" aria-label="Close">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-          )}
 
-          {/* YES / NO buttons */}
-          <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => setSide(side === "yes" ? null : "yes")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                side === "yes"
-                  ? "border border-green-400 bg-green-500/20 text-green-300"
-                  : "border border-green-500/20 bg-green-500/[0.07] text-green-500 hover:border-green-500/40"
-              }`}
-            >
-              YES · {yesPct.toFixed(0)}¢
-            </button>
-            <button
-              onClick={() => setSide(side === "no" ? null : "no")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                side === "no"
-                  ? "border border-red-400 bg-red-500/20 text-red-300"
-                  : "border border-red-500/20 bg-red-500/[0.07] text-red-500 hover:border-red-500/40"
-              }`}
-            >
-              NO · {noPct.toFixed(0)}¢
-            </button>
-          </div>
+            {chainId !== RH_TESTNET_ID && isConnected && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+                <span className="text-yellow-400 text-xs">⚠</span>
+                <p className="text-xs text-yellow-300">
+                  Wrong network. Click Bet and you'll be prompted to switch to RH Chain Testnet.
+                </p>
+              </div>
+            )}
+            {error && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+                <p className="text-xs text-red-300">Couldn't load live market data: {error}</p>
+              </div>
+            )}
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">{group.description}</p>
 
-          {/* Collateral — only shown as a dropdown when more than one real on-chain market exists for this question */}
-          {group.variants.length > 1 && (
-            <div className="mb-3">
-              <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-600">
-                Collateral (each option is a separate real market with its own pool)
-              </label>
-              <select
-                value={selectedId}
-                onChange={(e) => handleVariantChange(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
+            {reference && referenceYesPct !== null && (
+              <div className="mb-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-600">
+                  Reference — a related, separate market on Polymarket (not what your bet settles against)
+                </p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-xs text-slate-400 truncate">{reference.question}</p>
+                  <a
+                    href={`https://polymarket.com/event/${reference.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs font-medium text-mint hover:underline"
+                  >
+                    {Math.round(referenceYesPct)}¢ YES ↗
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* YES / NO buttons */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setSide(side === "yes" ? null : "yes")}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                  side === "yes"
+                    ? "border border-green-400 bg-green-500/20 text-green-300"
+                    : "border border-green-500/20 bg-green-500/[0.07] text-green-500 hover:border-green-500/40"
+                }`}
               >
-                {group.variants.map((v) => (
-                  <option key={v.id} value={v.id}>{v.collateralLabel}</option>
-                ))}
-              </select>
+                YES · {yesPct.toFixed(0)}¢
+              </button>
+              <button
+                onClick={() => setSide(side === "no" ? null : "no")}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                  side === "no"
+                    ? "border border-red-400 bg-red-500/20 text-red-300"
+                    : "border border-red-500/20 bg-red-500/[0.07] text-red-500 hover:border-red-500/40"
+                }`}
+              >
+                NO · {noPct.toFixed(0)}¢
+              </button>
             </div>
-          )}
 
-          {/* Amount */}
-          <div className="flex gap-2 mb-3">
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={`Amount in ${symbol}`}
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
-            />
-            <span className="flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-300">
-              {symbol}
-            </span>
-            <button
-              onClick={handleBet}
-              disabled={submitting || !side || !amount || loading}
-              className="rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-navy disabled:opacity-40 whitespace-nowrap"
-            >
-              {submitting ? "..." : side ? `Bet ${side.toUpperCase()}` : "Select side"}
-            </button>
-          </div>
+            {/* Collateral — only shown as a dropdown when more than one real on-chain market exists for this question */}
+            {group.variants.length > 1 && (
+              <div className="mb-3">
+                <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-600">
+                  Collateral (each option is a separate real market with its own pool)
+                </label>
+                <select
+                  value={selectedId}
+                  onChange={(e) => handleVariantChange(Number(e.target.value))}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
+                >
+                  {group.variants.map((v) => (
+                    <option key={v.id} value={v.id}>{v.collateralLabel}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-          {/* Payout preview */}
-          {side && amount && parseFloat(amount) > 0 && (
-            <div className="mb-3 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-400 flex justify-between">
-              <span>Est. payout if {side.toUpperCase()} wins</span>
-              <span className="font-medium text-slate-200">
-                {(parseFloat(amount) * (100 / (side === "yes" ? yesPct : noPct))).toFixed(4)} {symbol}
+            {/* Amount */}
+            <div className="flex gap-2 mb-3">
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={`Amount in ${symbol}`}
+                className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-mint focus:outline-none"
+              />
+              <span className="flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+                {symbol}
               </span>
+              <button
+                onClick={handleBet}
+                disabled={submitting || !side || !amount || loading}
+                className="rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-navy disabled:opacity-40 whitespace-nowrap"
+              >
+                {submitting ? "..." : side ? `Bet ${side.toUpperCase()}` : "Select side"}
+              </button>
             </div>
-          )}
 
-          {txStatus && (
-            <p className="mt-1 break-all text-xs text-slate-400">{txStatus}</p>
-          )}
+            {/* Payout preview */}
+            {side && amount && parseFloat(amount) > 0 && (
+              <div className="mb-3 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-400 flex justify-between">
+                <span>Est. payout if {side.toUpperCase()} wins</span>
+                <span className="font-medium text-slate-200">
+                  {(parseFloat(amount) * (100 / (side === "yes" ? yesPct : noPct))).toFixed(4)} {symbol}
+                </span>
+              </div>
+            )}
 
-          {/* Pool breakdown — live on-chain values */}
-          <div className="mt-3 flex gap-2 text-xs text-slate-600">
-            <span>YES pool: {fmtAmount(yesPool)} {symbol}</span>
-            <span>·</span>
-            <span>NO pool: {fmtAmount(noPool)} {symbol}</span>
-            <span>·</span>
-            <span>2% protocol fee</span>
+            {txStatus && (
+              <p className="mt-1 break-all text-xs text-slate-400">{txStatus}</p>
+            )}
+
+            {/* Pool breakdown — live on-chain values */}
+            <div className="mt-3 flex gap-2 text-xs text-slate-600">
+              <span>YES pool: {fmtAmount(yesPool)} {symbol}</span>
+              <span>·</span>
+              <span>NO pool: {fmtAmount(noPool)} {symbol}</span>
+              <span>·</span>
+              <span>2% protocol fee</span>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -870,11 +881,14 @@ function MyPositions({ variants }: { variants: { id: number; question: string }[
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const ALL_CATEGORIES = ["All", "Sports", "Crypto", "Stocks", "Macro", "RWAForge"] as const;
+
 export function PredictionMarkets() {
   const [filter, setFilter] = useState("");
+  const [category, setCategory] = useState<(typeof ALL_CATEGORIES)[number]>("All");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [referencePool, setReferencePool] = useState<PolymarketMarket[]>([]);
-  const { groups: dynamicGroups, allVariants: dynamicVariants, loading: dynamicLoading } = useDynamicSportsGroups();
+  const { groups: dynamicGroups, allVariants: dynamicVariants, loading: dynamicLoading, refresh: refreshDynamicGroups } = useDynamicMarketGroups();
 
   useEffect(() => {
     fetchActiveMarketPool()
@@ -882,12 +896,21 @@ export function PredictionMarkets() {
       .catch(() => setReferencePool([]));
   }, []);
 
+  // Keep a live BTC/ETH "up or down" hour open - fire-and-forget, idempotent, safe to
+  // call on every page load. First visitor after a window expires rolls it forward.
+  useEffect(() => {
+    fetch("/api/markets/sync-crypto")
+      .then(() => refreshDynamicGroups())
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const allGroups = [...NATIVE_MARKET_GROUPS, ...dynamicGroups];
   const allVariants = [...STATIC_MARKET_VARIANTS, ...dynamicVariants];
 
-  const filteredGroups = filter
-    ? allGroups.filter((g) => g.question.toLowerCase().includes(filter.toLowerCase()))
-    : allGroups;
+  const filteredGroups = allGroups
+    .filter((g) => category === "All" || g.category === category)
+    .filter((g) => !filter || g.question.toLowerCase().includes(filter.toLowerCase()));
 
   const toggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -897,7 +920,16 @@ export function PredictionMarkets() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-100">Prediction Markets</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-slate-100">Prediction Markets</h2>
+              <span className="flex items-center gap-1 rounded-full border border-mint/20 bg-mint/10 px-2 py-0.5 text-[11px] font-medium text-mint">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
+                </span>
+                {filteredGroups.length} live
+              </span>
+            </div>
             <p className="mt-0.5 text-sm text-slate-500">
               Odds, pools, and positions read live from the deployed contract on RH Chain Testnet.
             </p>
@@ -905,6 +937,21 @@ export function PredictionMarkets() {
           <span className="shrink-0 rounded-full border border-mint/30 bg-mint/10 px-2.5 py-1 text-xs font-medium text-mint">
             Testnet
           </span>
+        </div>
+
+        {/* Category tabs */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {ALL_CATEGORIES.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                category === c ? "bg-mint text-navy" : "bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800"
+              }`}
+            >
+              {c}
+            </button>
+          ))}
         </div>
 
         {/* Search */}
@@ -923,9 +970,9 @@ export function PredictionMarkets() {
         </div>
 
         {/* Native markets */}
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredGroups.length === 0 && (
-            <p className="text-center text-sm text-slate-500 py-8">No markets match your search.</p>
+            <p className="col-span-full text-center text-sm text-slate-500 py-8">No markets match your search.</p>
           )}
           {filteredGroups.map((g) => (
             <NativeCard
@@ -936,8 +983,8 @@ export function PredictionMarkets() {
               referencePool={referencePool}
             />
           ))}
-          {dynamicLoading && <p className="text-center text-xs text-slate-600 py-2">Loading today's live sports markets…</p>}
         </div>
+        {dynamicLoading && <p className="text-center text-xs text-slate-600 py-2 mt-2">Loading today's live sports and crypto markets…</p>}
       </div>
 
       <MyPositions variants={allVariants} />
@@ -955,7 +1002,9 @@ export function PredictionMarkets() {
           a separate, related market on Polymarket for context only, sourced live from Polymarket's public API —
           your bet settles against RWAForge's own pool, not Polymarket's.{" "}
           <span className="font-medium text-slate-400">Sports markets</span> (MLB, ATP/WTA tennis) are created
-          fresh daily from real, currently-live games — old ones roll off automatically as new ones are created.
+          fresh daily from real, currently-live games — old ones roll off automatically as new ones are created.{" "}
+          <span className="font-medium text-slate-400">Crypto markets</span> (BTC, ETH) roll forward every hour and
+          resolve against Coinbase's real close price for that exact window, not an estimate.
         </p>
       </div>
     </div>
