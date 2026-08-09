@@ -691,7 +691,23 @@ type Position = {
   isClaimed: boolean;
   symbol: string;
   decimals: number;
+  yesPool: bigint;
+  noPool: bigint;
 };
+
+const PAYOUT_FEE_BPS = 200n; // 2%, matches the contract's default feeBps
+
+/**
+ * Same math as PredictionMarket._computePayout, computed client-side. For an open
+ * market this is a live estimate (the pool can still move before resolution); for a
+ * resolved one the pool is frozen, so this is exactly what claiming will pay out.
+ */
+function expectedPayout(p: Position): bigint {
+  const sidePool = p.side === "YES" ? p.yesPool : p.noPool;
+  if (sidePool === 0n) return 0n;
+  const payablePool = ((p.yesPool + p.noPool) * (10_000n - PAYOUT_FEE_BPS)) / 10_000n;
+  return (p.amount * payablePool) / sidePool;
+}
 
 function MyPositions({ variants }: { variants: { id: number; question: string }[] }) {
   const { address, isConnected } = useAccount();
@@ -733,10 +749,10 @@ function MyPositions({ variants }: { variants: { id: number; question: string }[
           }
 
           if (yesBet > 0n) {
-            found.push({ id: m.id, question: m.question, side: "YES", amount: yesBet, outcome, isClaimed, symbol, decimals });
+            found.push({ id: m.id, question: m.question, side: "YES", amount: yesBet, outcome, isClaimed, symbol, decimals, yesPool: market.yesPool, noPool: market.noPool });
           }
           if (noBet > 0n) {
-            found.push({ id: m.id, question: m.question, side: "NO", amount: noBet, outcome, isClaimed, symbol, decimals });
+            found.push({ id: m.id, question: m.question, side: "NO", amount: noBet, outcome, isClaimed, symbol, decimals, yesPool: market.yesPool, noPool: market.noPool });
           }
         } catch (e) {
           console.error("fetchPositions market", m.id, e);
@@ -852,7 +868,16 @@ function MyPositions({ variants }: { variants: { id: number; question: string }[
                       <p className="text-sm font-semibold text-slate-200">
                         {fmtAmount(Number(formatUnits(p.amount, p.decimals)))} {p.symbol}
                       </p>
+                      <p className="mt-1 text-[10px] text-slate-500">If {p.side} wins</p>
+                      <p className="text-xs font-medium text-mint">
+                        {fmtAmount(Number(formatUnits(expectedPayout(p), p.decimals)))} {p.symbol}
+                      </p>
                     </div>
+                  )}
+                  {won(p) && !p.isClaimed && (
+                    <p className="mb-1 text-xs text-mint">
+                      {fmtAmount(Number(formatUnits(expectedPayout(p), p.decimals)))} {p.symbol}
+                    </p>
                   )}
                   {(won(p) || p.outcome === 3) && !p.isClaimed && (
                     <button
