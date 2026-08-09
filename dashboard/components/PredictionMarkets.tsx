@@ -862,23 +862,43 @@ function MyPositions({ variants }: { variants: { id: number; question: string }[
                 </div>
 
                 <div className="shrink-0 text-right">
-                  {p.outcome === 0 && (
-                    <div>
-                      <p className="text-[10px] text-slate-500">Staked</p>
-                      <p className="text-sm font-semibold text-slate-200">
-                        {fmtAmount(Number(formatUnits(p.amount, p.decimals)))} {p.symbol}
-                      </p>
-                      <p className="mt-1 text-[10px] text-slate-500">If {p.side} wins</p>
-                      <p className="text-xs font-medium text-mint">
-                        {fmtAmount(Number(formatUnits(expectedPayout(p), p.decimals)))} {p.symbol}
-                      </p>
-                    </div>
-                  )}
-                  {won(p) && !p.isClaimed && (
-                    <p className="mb-1 text-xs text-mint">
-                      {fmtAmount(Number(formatUnits(expectedPayout(p), p.decimals)))} {p.symbol}
-                    </p>
-                  )}
+                  {p.outcome === 0 && (() => {
+                    const payout = expectedPayout(p);
+                    const net = payout - p.amount;
+                    const profitable = net >= 0n;
+                    return (
+                      <div>
+                        <p className="text-[10px] text-slate-500">Staked</p>
+                        <p className="text-sm font-semibold text-slate-200">
+                          {fmtAmount(Number(formatUnits(p.amount, p.decimals)))} {p.symbol}
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500">Total back if {p.side} wins</p>
+                        <p className="text-xs font-medium text-mint">
+                          {fmtAmount(Number(formatUnits(payout, p.decimals)))} {p.symbol}
+                        </p>
+                        <p className={`text-[10px] ${profitable ? "text-green-400" : "text-yellow-500"}`}>
+                          {profitable ? "+" : ""}{fmtAmount(Number(formatUnits(net, p.decimals)))} {p.symbol}{" "}
+                          {profitable ? "profit" : "net — fee with no one on the other side yet"}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                  {won(p) && !p.isClaimed && (() => {
+                    const payout = expectedPayout(p);
+                    const net = payout - p.amount;
+                    const profitable = net >= 0n;
+                    return (
+                      <div className="mb-1">
+                        <p className="text-xs font-medium text-mint">
+                          {fmtAmount(Number(formatUnits(payout, p.decimals)))} {p.symbol}
+                        </p>
+                        <p className={`text-[10px] ${profitable ? "text-green-400" : "text-yellow-500"}`}>
+                          {profitable ? "+" : ""}{fmtAmount(Number(formatUnits(net, p.decimals)))} {p.symbol}{" "}
+                          {profitable ? "profit" : "net"}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {(won(p) || p.outcome === 3) && !p.isClaimed && (
                     <button
                       onClick={() => handleClaim(p.id)}
