@@ -899,6 +899,14 @@ function MyPositions({ variants }: { variants: { id: number; question: string }[
                       </div>
                     );
                   })()}
+                  {p.outcome === 3 && !p.isClaimed && (
+                    <div className="mb-1">
+                      <p className="text-[10px] text-slate-500">Cancelled — full refund</p>
+                      <p className="text-xs font-medium text-mint">
+                        {fmtAmount(Number(formatUnits(p.amount, p.decimals)))} {p.symbol}
+                      </p>
+                    </div>
+                  )}
                   {(won(p) || p.outcome === 3) && !p.isClaimed && (
                     <button
                       onClick={() => handleClaim(p.id)}
@@ -948,6 +956,13 @@ export function PredictionMarkets() {
       .then(() => refreshDynamicGroups())
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ask BankrollVault to top up any thin market/combo - fire-and-forget, idempotent,
+  // bounded by the vault's own caps. This is what stops a lone bettor from being
+  // stuck paying the protocol fee with no one on the other side.
+  useEffect(() => {
+    fetch("/api/markets/sync-vault").catch(() => {});
   }, []);
 
   const allGroups = [...NATIVE_MARKET_GROUPS, ...dynamicGroups];
