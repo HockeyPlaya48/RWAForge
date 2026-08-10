@@ -63,6 +63,12 @@ function parseGameStartTime(raw: unknown): number | null {
 }
 
 const LOOKAHEAD_SECONDS = 48 * 3600; // don't pick games more than 2 days out
+const NON_MONEYLINE_OUTCOMES = new Set(["over", "under", "yes", "no", "tie", "draw", "even"]);
+
+/** Rejects totals/prop markets (Over/Under, Yes/No, ...) that happen to share the same slug prefix as real moneylines. */
+function looksLikeMoneyline(outcomes: string[]): boolean {
+  return outcomes.length === 2 && outcomes.every((o) => o.length >= 3 && !NON_MONEYLINE_OUTCOMES.has(o.trim().toLowerCase()));
+}
 
 function pickMlbGames(markets: any[], existingQuestions: Set<string>, max: number): Pick[] {
   const now = Math.floor(Date.now() / 1000);
@@ -73,7 +79,7 @@ function pickMlbGames(markets: any[], existingQuestions: Set<string>, max: numbe
     const startTime = parseGameStartTime(m.gameStartTime);
     if (startTime === null || startTime <= now || startTime > now + LOOKAHEAD_SECONDS) continue;
     const outcomes = parseOutcomes(m.outcomes);
-    if (outcomes.length !== 2) continue;
+    if (!looksLikeMoneyline(outcomes)) continue;
     const question = `Will the ${outcomes[0]} beat the ${outcomes[1]} today?`;
     if (seen.has(question) || existingQuestions.has(question)) continue;
     seen.add(question);
@@ -92,7 +98,7 @@ function pickTennisMatches(markets: any[], existingQuestions: Set<string>, max: 
     const startTime = parseGameStartTime(m.gameStartTime);
     if (startTime === null || startTime <= now || startTime > now + LOOKAHEAD_SECONDS) continue;
     const outcomes = parseOutcomes(m.outcomes);
-    if (outcomes.length !== 2) continue;
+    if (!looksLikeMoneyline(outcomes)) continue;
     const question = `Will ${outcomes[0]} beat ${outcomes[1]} in their upcoming match?`;
     if (seen.has(question) || existingQuestions.has(question)) continue;
     seen.add(question);
