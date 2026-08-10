@@ -748,10 +748,11 @@ function MyPositions({ variants }: { variants: { id: number; question: string }[
             decimals = Number(d);
           }
 
-          if (yesBet > 0n) {
+          // Already-claimed positions are done - nothing left to show or act on, so they drop off the list.
+          if (yesBet > 0n && !isClaimed) {
             found.push({ id: m.id, question: m.question, side: "YES", amount: yesBet, outcome, isClaimed, symbol, decimals, yesPool: market.yesPool, noPool: market.noPool });
           }
-          if (noBet > 0n) {
+          if (noBet > 0n && !isClaimed) {
             found.push({ id: m.id, question: m.question, side: "NO", amount: noBet, outcome, isClaimed, symbol, decimals, yesPool: market.yesPool, noPool: market.noPool });
           }
         } catch (e) {
@@ -963,6 +964,17 @@ export function PredictionMarkets() {
   // stuck paying the protocol fee with no one on the other side.
   useEffect(() => {
     fetch("/api/markets/sync-vault").catch(() => {});
+  }, []);
+
+  // Sports markets close for betting at the real scheduled game time now, not a fixed
+  // window - so as soon as that passes, try to resolve against the real result. Fully
+  // idempotent, safe to call on every page load instead of waiting for the once-daily
+  // cron backstop.
+  useEffect(() => {
+    fetch("/api/cron/resolve-sports-markets")
+      .then(() => refreshDynamicGroups())
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const allGroups = [...NATIVE_MARKET_GROUPS, ...dynamicGroups];

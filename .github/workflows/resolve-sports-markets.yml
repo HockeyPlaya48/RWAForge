@@ -1,0 +1,19 @@
+name: Resolve sports markets
+
+# Vercel Hobby's cron only fires once a day, which is too infrequent to catch a
+# game finishing and clear it from the browse list promptly. This runs every 30
+# minutes as a reliable backstop, independent of whether anyone visits the site.
+# The endpoint is idempotent and unauthenticated - see
+# dashboard/app/api/cron/resolve-sports-markets/route.ts for why that's safe.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call resolve-sports-markets
+        run: curl -sf https://rwaforge.vercel.app/api/cron/resolve-sports-markets

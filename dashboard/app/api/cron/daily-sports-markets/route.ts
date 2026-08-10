@@ -15,7 +15,6 @@ const ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as Address;
 const MIN_TREASURY_ETH = 500_000_000_000_000n; // 0.0005 ETH safety floor - abort rather than drain to zero
 const MAX_MLB_GAMES = 2;
 const MAX_TENNIS_MATCHES = 2;
-const BETTING_WINDOW_HOURS = 16; // how long a market stays open for bets before its game
 
 const PM_ABI = [
   {
@@ -55,49 +54,49 @@ async function fetchPolymarketPages(pages = 4) {
   return results.flat() as any[];
 }
 
-function slugDate(slug: string): string | null {
-  const m = /(\d{4}-\d{2}-\d{2})$/.exec(slug ?? "");
-  return m ? m[1] : null;
+/** Polymarket's gameStartTime looks like "2026-08-10 23:07:00+00" - normalize to real ISO so Date can parse it. */
+function parseGameStartTime(raw: unknown): number | null {
+  if (typeof raw !== "string" || !raw) return null;
+  const iso = raw.trim().replace(" ", "T").replace(/\+00$/, "Z");
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
 }
 
-function eligibleDates(): Set<string> {
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000).toISOString().slice(0, 10);
-  return new Set([today, tomorrow]);
-}
+const LOOKAHEAD_SECONDS = 48 * 3600; // don't pick games more than 2 days out
 
 function pickMlbGames(markets: any[], existingQuestions: Set<string>, max: number): Pick[] {
-  const dates = eligibleDates();
+  const now = Math.floor(Date.now() / 1000);
   const picks: Pick[] = [];
   const seen = new Set<string>();
   for (const m of markets) {
-    const date = slugDate(m.slug ?? "");
-    if (!date || !dates.has(date) || !/^mlb-/.test(m.slug ?? "")) continue;
+    if (!/^mlb-/.test(m.slug ?? "")) continue;
+    const startTime = parseGameStartTime(m.gameStartTime);
+    if (startTime === null || startTime <= now || startTime > now + LOOKAHEAD_SECONDS) continue;
     const outcomes = parseOutcomes(m.outcomes);
     if (outcomes.length !== 2) continue;
     const question = `Will the ${outcomes[0]} beat the ${outcomes[1]} today?`;
     if (seen.has(question) || existingQuestions.has(question)) continue;
     seen.add(question);
-    picks.push({ question, endTime: BigInt(Math.floor(Date.now() / 1000) + BETTING_WINDOW_HOURS * 3600) });
+    picks.push({ question, endTime: BigInt(startTime) }); // betting closes at first pitch, like a real sportsbook
     if (picks.length >= max) break;
   }
   return picks;
 }
 
 function pickTennisMatches(markets: any[], existingQuestions: Set<string>, max: number): Pick[] {
-  const dates = eligibleDates();
+  const now = Math.floor(Date.now() / 1000);
   const picks: Pick[] = [];
   const seen = new Set<string>();
   for (const m of markets) {
-    const date = slugDate(m.slug ?? "");
-    if (!date || !dates.has(date) || !/^(atp|wta)-/.test(m.slug ?? "")) continue;
+    if (!/^(atp|wta)-/.test(m.slug ?? "")) continue;
+    const startTime = parseGameStartTime(m.gameStartTime);
+    if (startTime === null || startTime <= now || startTime > now + LOOKAHEAD_SECONDS) continue;
     const outcomes = parseOutcomes(m.outcomes);
     if (outcomes.length !== 2) continue;
     const question = `Will ${outcomes[0]} beat ${outcomes[1]} in their upcoming match?`;
     if (seen.has(question) || existingQuestions.has(question)) continue;
     seen.add(question);
-    picks.push({ question, endTime: BigInt(Math.floor(Date.now() / 1000) + BETTING_WINDOW_HOURS * 3600) });
+    picks.push({ question, endTime: BigInt(startTime) });
     if (picks.length >= max) break;
   }
   return picks;

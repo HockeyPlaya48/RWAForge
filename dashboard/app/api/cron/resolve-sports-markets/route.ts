@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createPublicClient, createWalletClient, http, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -77,14 +77,12 @@ function findRealOutcome(closedMarkets: any[], nameA: string, nameB: string): bo
   return null;
 }
 
-export async function GET(req: NextRequest) {
-  if (process.env.CRON_SECRET) {
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  }
-
+// Unlike daily-sports-markets (which creates new state and could be spammed to
+// over-create), this route is truly idempotent - it only ever resolves a market
+// that's genuinely past its window and still unresolved, and does nothing once
+// resolved. Safe to leave open (no CRON_SECRET) so the frontend can trigger it
+// directly on every page load instead of waiting for the once-daily cron.
+export async function GET() {
   const pmAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as Address | undefined;
   const rawKey = process.env.TREASURY_PRIVATE_KEY;
   if (!pmAddress || !rawKey) {
